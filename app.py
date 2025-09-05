@@ -10,7 +10,9 @@ app.secret_key = 'your-secret-key-here'  # Change this to a secure random key
 # Database setup
 def init_db():
     """Initialize the database with required tables"""
-    conn = sqlite3.connect('finance_tracker.db')
+    # Create data directory if it doesn't exist
+    os.makedirs('data', exist_ok=True)
+    conn = sqlite3.connect('data/finance_tracker.db')
     cursor = conn.cursor()
     
     # Personal activities table
@@ -61,7 +63,7 @@ def init_db():
 
 def get_db_connection():
     """Get database connection"""
-    conn = sqlite3.connect('finance_tracker.db')
+    conn = sqlite3.connect('data/finance_tracker.db')
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -416,4 +418,4 @@ if __name__ == '__main__':
     init_db()
     
     # Run the app
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)
