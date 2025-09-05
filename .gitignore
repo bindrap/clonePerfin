@@ -1,3 +1,2 @@
-finance_tracker.db
 /__pycache__
-*.xlsx
+/virtualEnv
