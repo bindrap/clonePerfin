@@ -1,50 +1,58 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, send_from_directory
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import sqlite3
 import os
 import json
+import pytz
 from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 
+# Toronto timezone
+TORONTO_TZ = pytz.timezone('America/Toronto')
+
+def get_toronto_date():
+    """Get current date in Toronto timezone"""
+    return datetime.now(TORONTO_TZ).date()
+
 @app.route('/favicon_io/<path:filename>')
 def favicon_io(filename):
     return send_from_directory('favicon_io', filename)
 
+@app.route('/img/<path:filename>')
+def serve_images(filename):
+    return send_from_directory('img', filename)
+
 @app.template_filter('tojsonfilter')
 def to_json_filter(value):
     def convert_row_to_dict(obj):
-        if hasattr(obj, 'keys'):
+        if hasattr(obj, 'keys') and hasattr(obj, '__getitem__'):
+            # This is a SQLite Row object
             return dict(obj)
         elif isinstance(obj, list):
             return [convert_row_to_dict(item) for item in obj]
+        elif isinstance(obj, tuple):
+            return list(obj)
         else:
             return obj
     
-    converted_value = convert_row_to_dict(value)
-    return json.dumps(converted_value)
+    try:
+        converted_value = convert_row_to_dict(value)
+        return json.dumps(converted_value, default=str)
+    except (TypeError, ValueError) as e:
+        # Fallback: convert to string representation
+        return json.dumps(str(value))
 
 def get_db_connection():
-    conn = sqlite3.connect('finance_tracker.db')
+    conn = sqlite3.connect('finance_tracker.db', detect_types=sqlite3.PARSE_DECLTYPES)
     conn.row_factory = sqlite3.Row
-    
-    # Fix SQLite date adapter deprecation warning
-    def adapt_date_iso(val):
-        return val.isoformat()
-    
-    def convert_date(val):
-        return datetime.fromisoformat(val.decode()).date()
-    
-    sqlite3.register_adapter(datetime.date, adapt_date_iso)
-    sqlite3.register_converter("DATE", convert_date)
-    
     return conn
 
 def get_current_budget_period():
     conn = get_db_connection()
     cursor = conn.cursor()
-    today = datetime.now().date()
+    today = get_toronto_date()
     cursor.execute('''
         SELECT * FROM budget_periods 
         WHERE start_date <= ? AND end_date >= ?
@@ -72,8 +80,10 @@ def dashboard():
     conn = get_db_connection()
     budget_period = get_current_budget_period()
     
-    today = datetime.now().date()
-    end_date = datetime.strptime(budget_period['end_date'], '%Y-%m-%d').date()
+    today = get_toronto_date()
+    end_date = budget_period['end_date']
+    if isinstance(end_date, str):
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
     days_left = (end_date - today).days + 1
     
     cursor = conn.cursor()
@@ -132,13 +142,21 @@ def dashboard():
         'total_tracked_days': total_days
     }
     
+    # Enhanced spending categorization
     cursor.execute('''
         SELECT 
             CASE 
-                WHEN LOWER(item) LIKE '%tim%' OR LOWER(item) LIKE '%coffee%' THEN 'Coffee'
-                WHEN LOWER(item) LIKE '%gas%' OR LOWER(item) LIKE '%fuel%' THEN 'Gas'
-                WHEN LOWER(item) LIKE '%food%' OR LOWER(item) LIKE '%restaurant%' OR LOWER(item) LIKE '%mcdonald%' OR LOWER(item) LIKE '%domino%' THEN 'Food'
-                WHEN LOWER(item) LIKE '%weed%' OR LOWER(item) LIKE '%cannabis%' THEN 'Cannabis'
+                WHEN LOWER(item) LIKE '%tim%' OR LOWER(item) LIKE '%tims%' THEN 'TIMS'
+                WHEN LOWER(item) LIKE '%coffee%' AND LOWER(item) NOT LIKE '%tim%' THEN 'Coffee (Other)'
+                WHEN LOWER(item) LIKE '%gas%' OR LOWER(item) LIKE '%fuel%' OR LOWER(item) LIKE '%petro%' THEN 'Gas'
+                WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%cannabis%' THEN 'Dispo'
+                WHEN LOWER(item) LIKE '%lcbo%' OR LOWER(item) LIKE '%alcohol%' OR LOWER(item) LIKE '%beer%' OR LOWER(item) LIKE '%wine%' THEN 'LCBO'
+                WHEN LOWER(item) LIKE '%mcdonald%' OR LOWER(item) LIKE '%mcds%' THEN 'McDonalds'
+                WHEN LOWER(item) LIKE '%domino%' THEN 'Dominos'
+                WHEN LOWER(item) LIKE '%food%' OR LOWER(item) LIKE '%restaurant%' OR LOWER(item) LIKE '%wendys%' OR LOWER(item) LIKE '%pizza%' OR LOWER(item) LIKE '%taco%' OR LOWER(item) LIKE '%burger%' OR LOWER(item) LIKE '%arbys%' OR LOWER(item) LIKE '%osmow%' OR LOWER(item) LIKE '%shawarma%' THEN 'Food'
+                WHEN LOWER(item) LIKE '%gym%' OR LOWER(item) LIKE '%fit%' OR LOWER(item) LIKE '%workout%' THEN 'Fitness'
+                WHEN LOWER(item) LIKE '%gift%' THEN 'Gifts'
+                WHEN LOWER(item) LIKE '%wash%' OR LOWER(item) LIKE '%car%' THEN 'Car Care'
                 ELSE 'Other'
             END as category,
             SUM(price) as total
@@ -159,16 +177,25 @@ def dashboard():
                          daily_spend_limit=daily_spend_limit,
                          activity_stats=activity_stats,
                          activity_percentages=activity_percentages,
-                         spending_by_category=spending_by_category)
+                         spending_by_category=spending_by_category,
+                         today=today)
 
 @app.route('/personal')
 def personal():
-    today = datetime.now().date()
+    # Get date from query parameter or use today
+    date_param = request.args.get('date')
+    if date_param:
+        try:
+            selected_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+        except ValueError:
+            selected_date = get_toronto_date()
+    else:
+        selected_date = get_toronto_date()
     
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM personal_log WHERE date = ?', (today,))
-    today_data = cursor.fetchone()
+    cursor.execute('SELECT * FROM personal_log WHERE date = ?', (selected_date,))
+    selected_data = cursor.fetchone()
     
     cursor.execute('''
         SELECT * FROM personal_log 
@@ -180,9 +207,9 @@ def personal():
     conn.close()
     
     return render_template('personal.html', 
-                         today_data=today_data, 
+                         today_data=selected_data, 
                          recent_entries=recent_entries,
-                         today=today)
+                         today=selected_date)
 
 @app.route('/personal/save', methods=['POST'])
 def save_personal():
@@ -211,11 +238,11 @@ def save_personal():
     conn.close()
     
     flash('Personal data saved successfully!', 'success')
-    return redirect(url_for('personal'))
+    return redirect(url_for('personal', date=date_str))
 
 @app.route('/spending')
 def spending():
-    today = datetime.now().date()
+    toronto_today = get_toronto_date()
     budget_period = get_current_budget_period()
     
     conn = get_db_connection()
@@ -224,7 +251,7 @@ def spending():
         SELECT * FROM spending_log 
         WHERE date = ? 
         ORDER BY created_at DESC
-    ''', (today,))
+    ''', (toronto_today,))
     today_spending = cursor.fetchall()
     
     cursor.execute('''
@@ -238,7 +265,7 @@ def spending():
         SELECT SUM(price) as total 
         FROM spending_log 
         WHERE date = ?
-    ''', (today,))
+    ''', (toronto_today,))
     today_total = cursor.fetchone()['total'] or 0
     
     cursor.execute('''
@@ -256,7 +283,7 @@ def spending():
                          period_spending=period_spending,
                          today_total=today_total,
                          period_total=period_total,
-                         today=today)
+                         today=toronto_today)
 
 @app.route('/spending/add', methods=['POST'])
 def add_spending():
@@ -304,7 +331,7 @@ def analytics():
     cursor = conn.cursor()
     
     # Get spending by time periods
-    today = datetime.now().date()
+    today = get_toronto_date()
     seven_days_ago = today - timedelta(days=7)
     thirty_days_ago = today - timedelta(days=30)
     ninety_days_ago = today - timedelta(days=90)
@@ -330,26 +357,37 @@ def analytics():
     ''', (ninety_days_ago,))
     quarterly_total = cursor.fetchone()['total'] or 0
     
-    # Detailed spending by category using spending_log with intelligent categorization
+    # Enhanced detailed spending by category using CTE for better categorization
     cursor.execute('''
-        SELECT 
-            CASE 
-                WHEN LOWER(item) LIKE '%tim%' OR LOWER(item) LIKE '%coffee%' THEN 'Coffee'
-                WHEN LOWER(item) LIKE '%gas%' OR LOWER(item) LIKE '%fuel%' OR LOWER(item) LIKE '%petro%' THEN 'Gas'
-                WHEN LOWER(item) LIKE '%food%' OR LOWER(item) LIKE '%restaurant%' OR LOWER(item) LIKE '%mcdonald%' OR LOWER(item) LIKE '%domino%' OR LOWER(item) LIKE '%metro%' OR LOWER(item) LIKE '%wendys%' OR LOWER(item) LIKE '%pizza%' OR LOWER(item) LIKE '%taco%' OR LOWER(item) LIKE '%burger%' OR LOWER(item) LIKE '%arbys%' THEN 'Food'
-                WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%weed%' OR LOWER(item) LIKE '%cannabis%' THEN 'Cannabis'
-                WHEN LOWER(item) LIKE '%gym%' OR LOWER(item) LIKE '%fit%' OR LOWER(item) LIKE '%workout%' THEN 'Fitness'
-                WHEN LOWER(item) LIKE '%gift%' THEN 'Gifts'
-                WHEN LOWER(item) LIKE '%wash%' OR LOWER(item) LIKE '%car%' THEN 'Car Care'
-                ELSE 'Other'
-            END as category,
-            SUM(price) as total,
-            COUNT(*) as count
-        FROM spending_log 
-        WHERE date >= ?
+        WITH categorized AS (
+            SELECT 
+                item,
+                CASE 
+                    WHEN LOWER(item) LIKE '%tim%' OR LOWER(item) LIKE '%tims%' THEN 'TIMS'
+                    WHEN LOWER(item) LIKE '%coffee%' AND LOWER(item) NOT LIKE '%tim%' THEN 'Coffee (Other)'
+                    WHEN LOWER(item) LIKE '%gas%' OR LOWER(item) LIKE '%fuel%' OR LOWER(item) LIKE '%petro%' THEN 'Gas'
+                    WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%cannabis%' THEN 'Dispo'
+                    WHEN LOWER(item) LIKE '%lcbo%' OR LOWER(item) LIKE '%alcohol%' OR LOWER(item) LIKE '%beer%' OR LOWER(item) LIKE '%wine%' THEN 'LCBO'
+                    WHEN LOWER(item) LIKE '%mcdonald%' OR LOWER(item) LIKE '%mcds%' THEN 'McDonalds'
+                    WHEN LOWER(item) LIKE '%domino%' THEN 'Dominos'
+                    WHEN LOWER(item) LIKE '%wendys%' THEN 'Wendys'
+                    WHEN LOWER(item) LIKE '%osmow%' OR LOWER(item) LIKE '%shawarma%' THEN 'Osmows/Shawarma'
+                    WHEN LOWER(item) LIKE '%arbys%' THEN 'Arbys'
+                    WHEN LOWER(item) LIKE '%food%' OR LOWER(item) LIKE '%restaurant%' OR LOWER(item) LIKE '%pizza%' OR LOWER(item) LIKE '%taco%' OR LOWER(item) LIKE '%burger%' THEN 'Food (Other)'
+                    WHEN LOWER(item) LIKE '%gym%' OR LOWER(item) LIKE '%fit%' OR LOWER(item) LIKE '%workout%' THEN 'Fitness'
+                    WHEN LOWER(item) LIKE '%gift%' THEN 'Gifts'
+                    WHEN LOWER(item) LIKE '%wash%' OR LOWER(item) LIKE '%car%' THEN 'Car Care'
+                    ELSE 'Other'
+                END as category,
+                price
+            FROM spending_log 
+            WHERE date >= ?
+        )
+        SELECT category, SUM(price) as total, COUNT(*) as count
+        FROM categorized
         GROUP BY category
         ORDER BY total DESC
-    ''', (thirty_days_ago,))
+    ''', (thirty_days_ago.strftime('%Y-%m-%d'),))
     detailed_categories = cursor.fetchall()
     
     # Top spending items from spending_log
@@ -497,7 +535,7 @@ def update_portfolio():
         flash('Please provide valid ETF values', 'error')
         return redirect(url_for('portfolio'))
     
-    today = datetime.now().date()
+    today = get_toronto_date()
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -541,10 +579,15 @@ def update_etf_holdings():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Update ETF holdings
-    cursor.execute('UPDATE etf_holdings SET purchase_value = ? WHERE etf_symbol = "NAS"', (nas_value,))
-    cursor.execute('UPDATE etf_holdings SET purchase_value = ? WHERE etf_symbol = "BTCC"', (btcc_value,))
-    cursor.execute('UPDATE etf_holdings SET purchase_value = ? WHERE etf_symbol = "ZSP"', (zsp_value,))
+    # Clear existing holdings and insert new ones
+    cursor.execute('DELETE FROM etf_holdings')
+    
+    if nas_value > 0:
+        cursor.execute('INSERT INTO etf_holdings (etf_symbol, purchase_value) VALUES (?, ?)', ('NAS', nas_value))
+    if btcc_value > 0:
+        cursor.execute('INSERT INTO etf_holdings (etf_symbol, purchase_value) VALUES (?, ?)', ('BTCC', btcc_value))
+    if zsp_value > 0:
+        cursor.execute('INSERT INTO etf_holdings (etf_symbol, purchase_value) VALUES (?, ?)', ('ZSP', zsp_value))
     
     conn.commit()
     conn.close()
@@ -558,7 +601,7 @@ def api_analytics():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    today = datetime.now().date()
+    today = get_toronto_date()
     thirty_days_ago = today - timedelta(days=29)
     
     # Daily spending over last 30 days
@@ -574,7 +617,7 @@ def api_analytics():
     # Fill in missing days with 0 spending
     complete_spending = []
     current_date = thirty_days_ago
-    spending_dict = {row['date']: row['total'] for row in daily_spending}
+    spending_dict = {row['date'].strftime('%Y-%m-%d') if isinstance(row['date'], date) else str(row['date']): row['total'] for row in daily_spending}
     
     while current_date <= today:
         date_str = current_date.strftime('%Y-%m-%d')
@@ -591,7 +634,14 @@ def api_analytics():
         WHERE date >= ? AND date <= ?
         ORDER BY date
     ''', (thirty_days_ago, today))
-    daily_activities = [dict(row) for row in cursor.fetchall()]
+    activities = cursor.fetchall()
+    
+    # Convert date objects to strings
+    daily_activities = []
+    for row in activities:
+        activity_dict = dict(row)
+        activity_dict['date'] = activity_dict['date'].strftime('%Y-%m-%d') if activity_dict['date'] else ''
+        daily_activities.append(activity_dict)
     
     conn.close()
     
@@ -606,49 +656,186 @@ def api_detailed_analytics():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Category spending over time using spending_log
+    # Enhanced category spending over time using CTE for better categorization
     cursor.execute('''
-        SELECT 
-            CASE 
-                WHEN LOWER(item) LIKE '%tim%' OR LOWER(item) LIKE '%coffee%' THEN 'Coffee'
-                WHEN LOWER(item) LIKE '%gas%' OR LOWER(item) LIKE '%fuel%' OR LOWER(item) LIKE '%petro%' THEN 'Gas'
-                WHEN LOWER(item) LIKE '%food%' OR LOWER(item) LIKE '%restaurant%' OR LOWER(item) LIKE '%mcdonald%' OR LOWER(item) LIKE '%domino%' OR LOWER(item) LIKE '%metro%' OR LOWER(item) LIKE '%wendys%' OR LOWER(item) LIKE '%pizza%' OR LOWER(item) LIKE '%taco%' OR LOWER(item) LIKE '%burger%' OR LOWER(item) LIKE '%arbys%' THEN 'Food'
-                WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%weed%' OR LOWER(item) LIKE '%cannabis%' THEN 'Cannabis'
-                WHEN LOWER(item) LIKE '%gym%' OR LOWER(item) LIKE '%fit%' OR LOWER(item) LIKE '%workout%' THEN 'Fitness'
-                WHEN LOWER(item) LIKE '%gift%' THEN 'Gifts'
-                WHEN LOWER(item) LIKE '%wash%' OR LOWER(item) LIKE '%car%' THEN 'Car Care'
-                ELSE 'Other'
-            END as category,
-            strftime('%Y-%m', date) as month,
-            SUM(price) as total
-        FROM spending_log 
-        WHERE date >= date('now', '-6 months')
-        GROUP BY category, strftime('%Y-%m', date)
+        WITH categorized AS (
+            SELECT 
+                item,
+                CASE 
+                    WHEN LOWER(item) LIKE '%tim%' OR LOWER(item) LIKE '%tims%' THEN 'TIMS'
+                    WHEN LOWER(item) LIKE '%coffee%' AND LOWER(item) NOT LIKE '%tim%' THEN 'Coffee (Other)'
+                    WHEN LOWER(item) LIKE '%gas%' OR LOWER(item) LIKE '%fuel%' OR LOWER(item) LIKE '%petro%' THEN 'Gas'
+                    WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%cannabis%' THEN 'Dispo'
+                    WHEN LOWER(item) LIKE '%lcbo%' OR LOWER(item) LIKE '%alcohol%' OR LOWER(item) LIKE '%beer%' OR LOWER(item) LIKE '%wine%' THEN 'LCBO'
+                    WHEN LOWER(item) LIKE '%mcdonald%' OR LOWER(item) LIKE '%mcds%' THEN 'McDonalds'
+                    WHEN LOWER(item) LIKE '%domino%' THEN 'Dominos'
+                    WHEN LOWER(item) LIKE '%wendys%' THEN 'Wendys'
+                    WHEN LOWER(item) LIKE '%osmow%' OR LOWER(item) LIKE '%shawarma%' THEN 'Osmows'
+                    WHEN LOWER(item) LIKE '%arbys%' THEN 'Arbys'
+                    WHEN LOWER(item) LIKE '%food%' OR LOWER(item) LIKE '%restaurant%' OR LOWER(item) LIKE '%pizza%' OR LOWER(item) LIKE '%taco%' OR LOWER(item) LIKE '%burger%' THEN 'Food (Other)'
+                    WHEN LOWER(item) LIKE '%gym%' OR LOWER(item) LIKE '%fit%' OR LOWER(item) LIKE '%workout%' THEN 'Fitness'
+                    WHEN LOWER(item) LIKE '%gift%' THEN 'Gifts'
+                    WHEN LOWER(item) LIKE '%wash%' OR LOWER(item) LIKE '%car%' THEN 'Car Care'
+                    ELSE 'Other'
+                END as category,
+                strftime('%Y-%m', date) as month,
+                price
+            FROM spending_log 
+            WHERE date >= date('now', '-6 months')
+        )
+        SELECT category, month, SUM(price) as total
+        FROM categorized
+        GROUP BY category, month
         ORDER BY month, category
     ''')
     category_trends = [dict(row) for row in cursor.fetchall()]
     
-    # Weekly spending averages
+    # Overall daily average calculation - total spent divided by total days tracked
     cursor.execute('''
         SELECT 
-            strftime('%Y-%W', date) as week,
-            AVG(daily_total) as avg_daily
-        FROM (
-            SELECT date, SUM(price) as daily_total
-            FROM spending_log
-            WHERE date >= date('now', '-12 weeks')
-            GROUP BY date
-        )
-        GROUP BY strftime('%Y-%W', date)
-        ORDER BY week
+            COUNT(DISTINCT date) as total_days,
+            SUM(price) as total_spent,
+            ROUND(SUM(price) * 1.0 / COUNT(DISTINCT date), 2) as overall_daily_avg
+        FROM spending_log
     ''')
-    weekly_averages = [dict(row) for row in cursor.fetchall()]
+    overall_stats = cursor.fetchone()
+    
+    # Also get daily averages for the last few months for trend visualization
+    cursor.execute('''
+        SELECT 
+            strftime('%Y-%m', date) as month,
+            COUNT(DISTINCT date) as days_in_month,
+            SUM(price) as monthly_total,
+            ROUND(SUM(price) * 1.0 / COUNT(DISTINCT date), 2) as avg_daily_for_month
+        FROM spending_log
+        WHERE date >= date('now', '-6 months')
+        GROUP BY strftime('%Y-%m', date)
+        ORDER BY month
+    ''')
+    monthly_daily_averages = [dict(row) for row in cursor.fetchall()]
     
     conn.close()
     
     return jsonify({
         'category_trends': category_trends,
-        'weekly_averages': weekly_averages
+        'monthly_daily_averages': monthly_daily_averages,
+        'overall_stats': dict(overall_stats)
+    })
+
+@app.route('/api/analytics/activities')
+def api_activity_analytics():
+    """API endpoint for detailed activity analytics"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Overall activity statistics
+    cursor.execute('''
+        SELECT 
+            COUNT(*) as total_days,
+            SUM(gym) as gym_days,
+            SUM(jiu_jitsu) as jj_days,
+            SUM(skateboarding) as skate_days,
+            SUM(work) as work_days,
+            SUM(sauna) as sauna_days,
+            SUM(supplements) as supp_days,
+            SUM(coitus) as coitus_days
+        FROM personal_log
+    ''')
+    stats = cursor.fetchone()
+    
+    # Calculate percentages
+    total_days = stats['total_days'] if stats['total_days'] > 0 else 1
+    activity_stats = {
+        'total_days': stats['total_days'],
+        'gym_days': stats['gym_days'],
+        'jj_days': stats['jj_days'],
+        'skate_days': stats['skate_days'],
+        'work_days': stats['work_days'],
+        'sauna_days': stats['sauna_days'],
+        'supp_days': stats['supp_days'],
+        'coitus_days': stats['coitus_days'],
+        'gym_percentage': (stats['gym_days'] / total_days) * 100,
+        'jj_percentage': (stats['jj_days'] / total_days) * 100,
+        'work_percentage': (stats['work_days'] / total_days) * 100,
+    }
+    
+    # Weekly activity patterns (last 12 weeks)
+    cursor.execute('''
+        SELECT 
+            strftime('%Y-%W', date) as week,
+            SUM(gym) as gym,
+            SUM(jiu_jitsu) as jiu_jitsu,
+            SUM(work) as work,
+            SUM(skateboarding) as skateboarding
+        FROM personal_log 
+        WHERE date >= date('now', '-12 weeks')
+        GROUP BY strftime('%Y-%W', date)
+        ORDER BY week DESC
+        LIMIT 12
+    ''')
+    weekly_patterns = [dict(row) for row in cursor.fetchall()]
+    
+    # Calculate current streaks
+    cursor.execute('''
+        SELECT date, gym, jiu_jitsu, work
+        FROM personal_log 
+        ORDER BY date DESC 
+        LIMIT 30
+    ''')
+    recent_data = cursor.fetchall()
+    
+    # Calculate streaks
+    gym_streak = 0
+    jj_streak = 0
+    work_streak = 0
+    
+    for day in recent_data:
+        if day['gym']:
+            gym_streak += 1
+        else:
+            break
+    
+    for day in recent_data:
+        if day['jiu_jitsu']:
+            jj_streak += 1
+        else:
+            break
+            
+    for day in recent_data:
+        if day['work']:
+            work_streak += 1
+        else:
+            break
+    
+    streaks = {
+        'gym_current': gym_streak,
+        'jj_current': jj_streak,
+        'work_current': work_streak
+    }
+    
+    # Generate insights
+    insights = []
+    if activity_stats['gym_percentage'] > 50:
+        insights.append(f"You hit the gym {activity_stats['gym_percentage']:.0f}% of days - great consistency!")
+    if activity_stats['jj_percentage'] > 40:
+        insights.append(f"Strong jiu jitsu practice at {activity_stats['jj_percentage']:.0f}% of days")
+    if gym_streak > 3:
+        insights.append(f"You're on a {gym_streak}-day gym streak! 💪")
+    if jj_streak > 2:
+        insights.append(f"Current jiu jitsu streak: {jj_streak} days 🥋")
+    if activity_stats['work_percentage'] > 60:
+        insights.append(f"High work consistency at {activity_stats['work_percentage']:.0f}% of tracked days")
+    
+    if not insights:
+        insights.append("Keep building those healthy habits!")
+    
+    conn.close()
+    
+    return jsonify({
+        'activity_stats': activity_stats,
+        'weekly_patterns': weekly_patterns,
+        'streaks': streaks,
+        'insights': insights
     })
 
 @app.route('/api/portfolio')
@@ -701,7 +888,7 @@ def update_portfolio_daily():
         return jsonify({'error': 'Missing ETF values'}), 400
     
     current_value = float(nasdaq_value) + float(btcc_value) + float(zsp_value)
-    today = datetime.now().date()
+    today = get_toronto_date()
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -743,5 +930,19 @@ def update_portfolio_daily():
         'difference_from_yesterday': difference
     })
 
+# Auto-fetch ETF prices endpoint (for future automation)
+@app.route('/api/portfolio/auto_update', methods=['POST'])
+def auto_update_portfolio():
+    """Auto-update portfolio with fetched ETF prices (placeholder for future API integration)"""
+    # This is where you would integrate with a financial API like Yahoo Finance, Alpha Vantage, etc.
+    # For now, this returns an error indicating manual update is required
+    
+    return jsonify({
+        'error': 'Auto-update not yet implemented',
+        'message': 'Please update portfolio values manually for now',
+        'suggestion': 'Future versions will integrate with financial APIs for automatic updates'
+    }), 501
+
 if __name__ == '__main__':
+    # Add pytz to requirements
     app.run(debug=True, host='0.0.0.0', port=5001)

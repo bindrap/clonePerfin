@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Analytics - Finance Tracker{% endblock %}
+{% block title %}Analytics - Perfin{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -115,10 +115,60 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h5><i class="fas fa-chart-bar"></i> Daily Average by Week</h5>
+                <h5><i class="fas fa-chart-bar"></i> Overall Daily Average & Monthly Trends</h5>
             </div>
             <div class="card-body">
                 <canvas id="weeklyAveragesChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Activity Analytics -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fas fa-dumbbell"></i> Activity Analytics & Habits</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card border-light">
+                            <div class="card-header bg-light">
+                                <h6><i class="fas fa-chart-pie"></i> Activity Frequency</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="activityFrequencyChart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-light">
+                            <div class="card-header bg-light">
+                                <h6><i class="fas fa-calendar-check"></i> Weekly Activity Patterns</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="weeklyActivityChart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card border-light">
+                            <div class="card-header bg-light">
+                                <h6><i class="fas fa-trophy"></i> Activity Streaks & Insights</h6>
+                            </div>
+                            <div class="card-body" id="activityInsights">
+                                <div class="text-center">
+                                    <i class="fas fa-spinner fa-spin"></i> Loading activity insights...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -261,20 +311,32 @@ fetch('/api/analytics/detailed')
             });
         }
         
-        // Weekly Averages Chart
-        if (data.weekly_averages.length > 0) {
+        // Overall Daily Average Chart with monthly trends
+        if (data.monthly_daily_averages && data.monthly_daily_averages.length > 0) {
             const avgCtx = document.getElementById('weeklyAveragesChart').getContext('2d');
+            
+            // Add overall average line
+            const overallAvg = data.overall_stats ? data.overall_stats.overall_daily_avg : 0;
             
             new Chart(avgCtx, {
                 type: 'bar',
                 data: {
-                    labels: data.weekly_averages.map(w => `Week ${w.week.split('-')[1]}`),
+                    labels: data.monthly_daily_averages.map(m => m.month),
                     datasets: [{
-                        label: 'Daily Average',
-                        data: data.weekly_averages.map(w => w.avg_daily),
+                        label: 'Monthly Daily Average',
+                        data: data.monthly_daily_averages.map(m => m.avg_daily_for_month),
                         backgroundColor: 'rgba(75, 192, 192, 0.6)',
                         borderColor: 'rgba(75, 192, 192, 1)',
                         borderWidth: 1
+                    }, {
+                        label: `Overall Daily Average ($${overallAvg})`,
+                        data: data.monthly_daily_averages.map(m => overallAvg),
+                        type: 'line',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0
                     }]
                 },
                 options: {
@@ -293,6 +355,119 @@ fetch('/api/analytics/detailed')
                 }
             });
         }
+        
+        // Load activity analytics
+        loadActivityAnalytics();
     });
+    
+    async function loadActivityAnalytics() {
+        try {
+            const response = await fetch('/api/analytics/activities');
+            const data = await response.json();
+            
+            // Activity Frequency Pie Chart
+            const freqCtx = document.getElementById('activityFrequencyChart').getContext('2d');
+            new Chart(freqCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Gym', 'Jiu Jitsu', 'Work', 'Supplements', 'Skateboarding', 'Sauna'],
+                    datasets: [{
+                        data: [
+                            data.activity_stats.gym_days,
+                            data.activity_stats.jj_days,
+                            data.activity_stats.work_days,
+                            data.activity_stats.supp_days,
+                            data.activity_stats.skate_days,
+                            data.activity_stats.sauna_days
+                        ],
+                        backgroundColor: [
+                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+            
+            // Weekly Activity Pattern Chart
+            const weeklyCtx = document.getElementById('weeklyActivityChart').getContext('2d');
+            new Chart(weeklyCtx, {
+                type: 'line',
+                data: {
+                    labels: data.weekly_patterns.map(w => `Week ${w.week}`),
+                    datasets: [{
+                        label: 'Gym',
+                        data: data.weekly_patterns.map(w => w.gym),
+                        borderColor: '#FF6384',
+                        fill: false
+                    }, {
+                        label: 'Jiu Jitsu',
+                        data: data.weekly_patterns.map(w => w.jiu_jitsu),
+                        borderColor: '#36A2EB',
+                        fill: false
+                    }, {
+                        label: 'Work',
+                        data: data.weekly_patterns.map(w => w.work),
+                        borderColor: '#FFCE56',
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 7
+                        }
+                    }
+                }
+            });
+            
+            // Activity Insights
+            const insightsDiv = document.getElementById('activityInsights');
+            insightsDiv.innerHTML = `
+                <div class="row">
+                    <div class="col-md-3 text-center">
+                        <h5 class="text-primary">${data.streaks.gym_current}</h5>
+                        <small>Current Gym Streak</small>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h5 class="text-info">${data.streaks.jj_current}</h5>
+                        <small>Current JJ Streak</small>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h5 class="text-success">${data.activity_stats.gym_percentage.toFixed(1)}%</h5>
+                        <small>Gym Consistency</small>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h5 class="text-warning">${data.activity_stats.jj_percentage.toFixed(1)}%</h5>
+                        <small>JJ Consistency</small>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6>💪 Activity Insights:</h6>
+                        <ul class="list-unstyled">
+                            ${data.insights.map(insight => `<li><i class="fas fa-lightbulb text-warning"></i> ${insight}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            document.getElementById('activityInsights').innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-exclamation-triangle"></i> Could not load activity analytics
+                </div>
+            `;
+        }
+    }
 </script>
 {% endblock %}

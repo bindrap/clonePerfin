@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Finance Tracker{% endblock %}
+{% block title %}Dashboard - Perfin{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
         <h1><i class="fas fa-chart-line"></i> Dashboard</h1>
-        <p class="text-muted">Overview of your finances and activities</p>
+        <p class="text-muted">Overview of your finances and activities - {{ today }}</p>
     </div>
 </div>
 
@@ -68,44 +68,53 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-2 col-6">
+                    <div class="col-lg-2 col-md-3 col-6">
                         <div class="stat-card">
                             <div class="stat-number text-primary">{{ activity_stats.gym_count or 0 }}</div>
                             <div>Gym Sessions</div>
                             <small class="text-muted">({{ activity_percentages.gym_percentage }}% overall)</small>
                         </div>
                     </div>
-                    <div class="col-md-2 col-6">
+                    <div class="col-lg-2 col-md-3 col-6">
                         <div class="stat-card">
                             <div class="stat-number text-danger">{{ activity_stats.jiu_jitsu_count or 0 }}</div>
                             <div>Jiu Jitsu</div>
                             <small class="text-muted">({{ activity_percentages.jiu_jitsu_percentage }}% overall)</small>
                         </div>
                     </div>
-                    <div class="col-md-2 col-6">
+                    <div class="col-lg-2 col-md-3 col-6">
                         <div class="stat-card">
                             <div class="stat-number text-warning">{{ activity_stats.skateboarding_count or 0 }}</div>
                             <div>Skateboarding</div>
                             <small class="text-muted">({{ activity_percentages.skateboarding_percentage }}% overall)</small>
                         </div>
                     </div>
-                    <div class="col-md-2 col-6">
+                    <div class="col-lg-2 col-md-3 col-6">
                         <div class="stat-card">
                             <div class="stat-number text-success">{{ activity_stats.work_count or 0 }}</div>
                             <div>Work Days</div>
                             <small class="text-muted">({{ activity_percentages.work_percentage }}% overall)</small>
                         </div>
                     </div>
-                    <div class="col-md-2 col-6">
+                    <div class="col-lg-2 col-md-3 col-6">
+                        <div class="stat-card">
+                            <div class="stat-number text-dark">{{ activity_stats.coitus_count or 0 }}</div>
+                            <div>Coitus</div>
+                            <small class="text-muted">({{ activity_percentages.coitus_percentage }}% overall)</small>
+                        </div>
+                    </div>
+                    <div class="col-lg-2 col-md-3 col-6">
                         <div class="stat-card">
                             <div class="stat-number text-info">{{ activity_stats.sauna_count or 0 }}</div>
                             <div>Sauna</div>
                             <small class="text-muted">({{ activity_percentages.sauna_percentage }}% overall)</small>
                         </div>
                     </div>
-                    <div class="col-md-2 col-6">
+                </div>
+                <div class="row mt-3">
+                    <div class="col-lg-2 col-md-3 col-6 offset-lg-5 offset-md-3">
                         <div class="stat-card">
-                            <div class="stat-number text-dark">{{ activity_stats.supplements_count or 0 }}</div>
+                            <div class="stat-number text-secondary">{{ activity_stats.supplements_count or 0 }}</div>
                             <div>Supplements</div>
                             <small class="text-muted">({{ activity_percentages.supplements_percentage }}% overall)</small>
                         </div>
@@ -180,9 +189,9 @@ fetch('/api/analytics')
             }
         });
 
-        // Activity Chart
+        // Activity Chart - Updated to include coitus
         const activityCtx = document.getElementById('activityChart').getContext('2d');
-        const activities = ['gym', 'jiu_jitsu', 'skateboarding', 'work', 'sauna', 'supplements'];
+        const activities = ['gym', 'jiu_jitsu', 'skateboarding', 'work', 'coitus', 'sauna', 'supplements'];
         const activityCounts = activities.map(activity => {
             return data.daily_activities.reduce((sum, day) => sum + (day[activity] || 0), 0);
         });
@@ -190,7 +199,7 @@ fetch('/api/analytics')
         new Chart(activityCtx, {
             type: 'bar',
             data: {
-                labels: ['Gym', 'Jiu Jitsu', 'Skateboarding', 'Work', 'Sauna', 'Supplements'],
+                labels: ['Gym', 'Jiu Jitsu', 'Skateboarding', 'Work', 'Coitus', 'Sauna', 'Supplements'],
                 datasets: [{
                     label: 'Activity Count',
                     data: activityCounts,
@@ -200,7 +209,8 @@ fetch('/api/analytics')
                         'rgba(255, 205, 86, 0.2)',
                         'rgba(75, 192, 192, 0.2)',
                         'rgba(153, 102, 255, 0.2)',
-                        'rgba(255, 159, 64, 0.2)'
+                        'rgba(255, 159, 64, 0.2)',
+                        'rgba(199, 199, 199, 0.2)'
                     ],
                     borderColor: [
                         'rgba(255, 99, 132, 1)',
@@ -208,7 +218,8 @@ fetch('/api/analytics')
                         'rgba(255, 205, 86, 1)',
                         'rgba(75, 192, 192, 1)',
                         'rgba(153, 102, 255, 1)',
-                        'rgba(255, 159, 64, 1)'
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(199, 199, 199, 1)'
                     ],
                     borderWidth: 1
                 }]

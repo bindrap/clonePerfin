@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Personal Activities - Finance Tracker{% endblock %}
+{% block title %}Personal Activities - Perfin{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -21,14 +21,14 @@
                     <div class="mb-3">
                         <label for="date" class="form-label">Date</label>
                         <input type="date" class="form-control" id="date" name="date" 
-                               value="{{ today }}" required>
+                               value="{{ today }}" required onchange="loadDataForDate()">
                     </div>
 
                     <div class="row">
                         <div class="col-md-6">
                             <div class="activity-toggle">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" name="gym" 
+                                    <input type="checkbox" name="gym" id="gym"
                                            {% if today_data and today_data.gym %}checked{% endif %}>
                                     <span class="slider"></span>
                                 </label>
@@ -38,7 +38,7 @@
                         <div class="col-md-6">
                             <div class="activity-toggle">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" name="jiu_jitsu" 
+                                    <input type="checkbox" name="jiu_jitsu" id="jiu_jitsu"
                                            {% if today_data and today_data.jiu_jitsu %}checked{% endif %}>
                                     <span class="slider"></span>
                                 </label>
@@ -51,7 +51,7 @@
                         <div class="col-md-6">
                             <div class="activity-toggle">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" name="skateboarding" 
+                                    <input type="checkbox" name="skateboarding" id="skateboarding"
                                            {% if today_data and today_data.skateboarding %}checked{% endif %}>
                                     <span class="slider"></span>
                                 </label>
@@ -61,7 +61,7 @@
                         <div class="col-md-6">
                             <div class="activity-toggle">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" name="work" 
+                                    <input type="checkbox" name="work" id="work"
                                            {% if today_data and today_data.work %}checked{% endif %}>
                                     <span class="slider"></span>
                                 </label>
@@ -74,7 +74,7 @@
                         <div class="col-md-6">
                             <div class="activity-toggle">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" name="coitus" 
+                                    <input type="checkbox" name="coitus" id="coitus"
                                            {% if today_data and today_data.coitus %}checked{% endif %}>
                                     <span class="slider"></span>
                                 </label>
@@ -84,7 +84,7 @@
                         <div class="col-md-6">
                             <div class="activity-toggle">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" name="sauna" 
+                                    <input type="checkbox" name="sauna" id="sauna"
                                            {% if today_data and today_data.sauna %}checked{% endif %}>
                                     <span class="slider"></span>
                                 </label>
@@ -97,7 +97,7 @@
                         <div class="col-md-6">
                             <div class="activity-toggle">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" name="supplements" 
+                                    <input type="checkbox" name="supplements" id="supplements"
                                            {% if today_data and today_data.supplements %}checked{% endif %}>
                                     <span class="slider"></span>
                                 </label>
@@ -130,7 +130,11 @@
                     {% for entry in recent_entries %}
                     <div class="border-bottom pb-2 mb-2">
                         <div class="d-flex justify-content-between">
-                            <strong>{{ entry.date }}</strong>
+                            <strong>
+                                <a href="{{ url_for('personal', date=entry.date) }}" class="text-decoration-none">
+                                    {{ entry.date }}
+                                </a>
+                            </strong>
                         </div>
                         <div class="mt-1">
                             {% if entry.gym %}<span class="badge bg-primary me-1">💪 Gym</span>{% endif %}
@@ -155,4 +159,14 @@
         </div>
     </div>
 </div>
+
+<script>
+function loadDataForDate() {
+    const selectedDate = document.getElementById('date').value;
+    if (selectedDate) {
+        // Redirect to load data for selected date
+        window.location.href = `{{ url_for('personal') }}?date=${selectedDate}`;
+    }
+}
+</script>
 {% endblock %}
