@@ -4,7 +4,7 @@ services:
     ports:
       - "5001:5001"
     volumes:
-      - ./data:/app/data
+      - .:/app
       - ./templates:/app/templates
       - ./static:/app/static
     restart: unless-stopped
