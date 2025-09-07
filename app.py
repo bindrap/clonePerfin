@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, send_from_directory
 from datetime import datetime, timedelta
 import sqlite3
 import os
@@ -7,6 +7,10 @@ from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
+
+@app.route('/favicon_io/<path:filename>')
+def favicon_io(filename):
+    return send_from_directory('favicon_io', filename)
 
 @app.template_filter('tojsonfilter')
 def to_json_filter(value):
