@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio - Finance Tracker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-chart-pie"></i> ETF Portfolio Tracker</h1>
+        <p class="text-muted">Track your investment portfolio performance and market value updates</p>
+    </div>
+</div>
+
+<!-- Portfolio Overview -->
+<div class="row mb-4">
+    {% if latest_snapshot %}
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">Current Value</h5>
+                <h2 class="text-primary">${{ "%.2f"|format(latest_snapshot.total_market_value) }}</h2>
+                <small class="text-muted">as of {{ latest_snapshot.date }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">Total Invested</h5>
+                <h2 class="text-info">${{ "%.2f"|format(latest_snapshot.total_invested) }}</h2>
+                <small class="text-muted">all-time contributions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">Profit/Loss</h5>
+                <h2 class="{% if latest_snapshot.profit_loss >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    ${{ "%.2f"|format(latest_snapshot.profit_loss) }}
+                </h2>
+                <small class="text-muted">unrealized P/L</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">Return %</h5>
+                <h2 class="{% if latest_snapshot.profit_loss_percentage >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    {{ "%.1f"|format(latest_snapshot.profit_loss_percentage) }}%
+                </h2>
+                <small class="text-muted">overall return</small>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="alert alert-info">
+            <h5><i class="fas fa-info-circle"></i> Get Started</h5>
+            Update your current portfolio value below to begin tracking performance!
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5><i class="fas fa-refresh"></i> Update ETF Market Values</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_portfolio') }}">
+                    <div class="mb-3">
+                        <label for="nasdaq_value" class="form-label">NASDAQ/NAS Value ($)</label>
+                        <input type="number" class="form-control" id="nasdaq_value" name="nasdaq_value" 
+                               step="0.01" min="0" placeholder="21000.00" 
+                               value="{{ latest_snapshot.nasdaq_value if latest_snapshot else '' }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="btcc_value" class="form-label">BTCC Value ($)</label>
+                        <input type="number" class="form-control" id="btcc_value" name="btcc_value" 
+                               step="0.01" min="0" placeholder="2600.00" 
+                               value="{{ latest_snapshot.btcc_value if latest_snapshot else '' }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="zsp_value" class="form-label">ZSP Value ($)</label>
+                        <input type="number" class="form-control" id="zsp_value" name="zsp_value" 
+                               step="0.01" min="0" placeholder="23000.00" 
+                               value="{{ latest_snapshot.zsp_value if latest_snapshot else '' }}" required>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <small>Total: $<span id="total_value">0.00</span></small>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="fas fa-sync"></i> Update Portfolio Values
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fas fa-cog"></i> Update ETF Holdings</h5>
+            </div>
+            <div class="card-body">
+                {% if latest_snapshot %}
+                <form method="POST" action="{{ url_for('update_etf_holdings') }}">
+                    <div class="mb-3">
+                        <label for="nas_value" class="form-label">NAS Purchase Value ($)</label>
+                        <input type="number" class="form-control" id="nas_value" name="nas_value" 
+                               step="0.01" min="0" placeholder="19164.42" required>
+                        <small class="text-muted">Total amount invested in NAS ETF</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="btcc_value" class="form-label">BTCC Purchase Value ($)</label>
+                        <input type="number" class="form-control" id="btcc_value" name="btcc_value" 
+                               step="0.01" min="0" placeholder="2630.15" required>
+                        <small class="text-muted">Total amount invested in BTCC ETF</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="zsp_value" class="form-label">ZSP Purchase Value ($)</label>
+                        <input type="number" class="form-control" id="zsp_value" name="zsp_value" 
+                               step="0.01" min="0" placeholder="20006.17" required>
+                        <small class="text-muted">Total amount invested in ZSP ETF</small>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-save"></i> Update ETF Holdings
+                    </button>
+                </form>
+                {% else %}
+                <div class="alert alert-info">
+                    <p><i class="fas fa-info-circle"></i> Please update your portfolio values first to manage ETF holdings.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Portfolio Performance Chart -->
+{% if performance_history %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-area"></i> Portfolio Performance (Last 30 Updates)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="portfolioChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ETF Holdings Summary -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5><i class="fas fa-chart-pie"></i> ETF Holdings Breakdown</h5>
+            </div>
+            <div class="card-body">
+                {% if latest_snapshot %}
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h6>NASDAQ/NAS</h6>
+                            <h4 class="text-primary">${{ "%.2f"|format(latest_snapshot.nasdaq_value) }}</h4>
+                            <small class="text-muted">{{ "%.1f"|format((latest_snapshot.nasdaq_value / latest_snapshot.total_market_value * 100) if latest_snapshot.total_market_value > 0 else 0) }}% of portfolio</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h6>BTCC</h6>
+                            <h4 class="text-warning">${{ "%.2f"|format(latest_snapshot.btcc_value) }}</h4>
+                            <small class="text-muted">{{ "%.1f"|format((latest_snapshot.btcc_value / latest_snapshot.total_market_value * 100) if latest_snapshot.total_market_value > 0 else 0) }}% of portfolio</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <h6>ZSP</h6>
+                            <h4 class="text-success">${{ "%.2f"|format(latest_snapshot.zsp_value) }}</h4>
+                            <small class="text-muted">{{ "%.1f"|format((latest_snapshot.zsp_value / latest_snapshot.total_market_value * 100) if latest_snapshot.total_market_value > 0 else 0) }}% of portfolio</small>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <p class="mb-0"><i class="fas fa-info-circle"></i> Update your portfolio values to see ETF breakdown</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Portfolio Updates -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5><i class="fas fa-history"></i> Recent Portfolio Updates</h5>
+            </div>
+            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                {% if recent_entries %}
+                    {% for entry in recent_entries %}
+                    <div class="portfolio-entry d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <strong>Portfolio Update</strong>
+                            <small class="text-muted ms-2">{{ entry.date }}</small>
+                            <div class="small text-muted">
+                                NAS: ${{ "%.2f"|format(entry.nasdaq_value or 0) }} | 
+                                BTCC: ${{ "%.2f"|format(entry.btcc_value or 0) }} | 
+                                ZSP: ${{ "%.2f"|format(entry.zsp_value or 0) }}
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <div><strong>${{ "%.2f"|format(entry.total_portfolio_value) }}</strong></div>
+                            <small class="{% if entry.difference >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                {% if entry.difference >= 0 %}+{% endif %}${{ "%.2f"|format(entry.difference) }}
+                            </small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">No portfolio updates recorded yet. Update your portfolio values above!</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if performance_history %}
+// Portfolio Performance Chart
+const performanceData = {{ performance_history | tojsonfilter | safe }};
+
+if (performanceData.length > 0) {
+    const portfolioCtx = document.getElementById('portfolioChart').getContext('2d');
+    
+    new Chart(portfolioCtx, {
+        type: 'line',
+        data: {
+            labels: performanceData.map(p => p.date).reverse(),
+            datasets: [
+                {
+                    label: 'Portfolio Value',
+                    data: performanceData.map(p => p.total_market_value).reverse(),
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Return %',
+                    data: performanceData.map(p => p.profit_loss_percentage).reverse(),
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    tension: 0.1,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Date'
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Portfolio Value ($)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString();
+                        }
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Return %'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(1) + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+{% endif %}
+
+// Auto-calculate total portfolio value
+function updateTotalValue() {
+    const nasdaq = parseFloat(document.getElementById('nasdaq_value').value) || 0;
+    const btcc = parseFloat(document.getElementById('btcc_value').value) || 0;
+    const zsp = parseFloat(document.getElementById('zsp_value').value) || 0;
+    const total = nasdaq + btcc + zsp;
+    
+    document.getElementById('total_value').textContent = total.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+// Add event listeners to update total on input change
+document.addEventListener('DOMContentLoaded', function() {
+    ['nasdaq_value', 'btcc_value', 'zsp_value'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('input', updateTotalValue);
+            element.addEventListener('keyup', updateTotalValue);
+        }
+    });
+    
+    // Calculate initial total
+    updateTotalValue();
+});
+</script>
+{% endblock %}

@@ -21,6 +21,10 @@
         .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: #2196F3; }
         input:checked + .slider:before { transform: translateX(26px); }
+        .portfolio-entry { border-left: 4px solid #28a745; padding: 0.5rem; margin: 0.25rem 0; background: white; }
+        .analytics-metric { text-align: center; padding: 1rem; }
+        .trend-up { color: #28a745; }
+        .trend-down { color: #dc3545; }
     </style>
 </head>
 <body>
@@ -41,6 +45,14 @@
                 <a class="nav-link {% if request.endpoint == 'spending' %}active{% endif %}" 
                    href="{{ url_for('spending') }}">
                     <i class="fas fa-wallet"></i> Spending
+                </a>
+                <a class="nav-link {% if request.endpoint == 'analytics' %}active{% endif %}" 
+                   href="{{ url_for('analytics') }}">
+                    <i class="fas fa-chart-bar"></i> Analytics
+                </a>
+                <a class="nav-link {% if request.endpoint == 'portfolio' %}active{% endif %}" 
+                   href="{{ url_for('portfolio') }}">
+                    <i class="fas fa-chart-pie"></i> Portfolio
                 </a>
             </div>
         </div>

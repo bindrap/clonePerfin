@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - Finance Tracker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-chart-bar"></i> Advanced Analytics</h1>
+        <p class="text-muted">Deep insights into your spending patterns and trends</p>
+    </div>
+</div>
+
+<!-- Time Period Overview -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body analytics-metric">
+                <h5 class="card-title">Last 7 Days</h5>
+                <h2 class="text-primary">${{ "%.2f"|format(weekly_total) }}</h2>
+                <small class="text-muted">Weekly spending</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body analytics-metric">
+                <h5 class="card-title">Last 30 Days</h5>
+                <h2 class="text-info">${{ "%.2f"|format(monthly_total) }}</h2>
+                <small class="text-muted">Monthly spending</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body analytics-metric">
+                <h5 class="card-title">Last 90 Days</h5>
+                <h2 class="text-warning">${{ "%.2f"|format(quarterly_total) }}</h2>
+                <small class="text-muted">Quarterly spending</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Category Analysis -->
+{% if detailed_categories %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5><i class="fas fa-tags"></i> Detailed Spending by Category</h5>
+                <small>Based on individual item tracking</small>
+            </div>
+            <div class="card-body">
+                {% for category in detailed_categories %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <span class="fw-bold">{{ category.category }}</span>
+                        <small class="text-muted">({{ category.count }} items)</small>
+                    </div>
+                    <span class="badge bg-primary">${{ "%.2f"|format(category.total) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5><i class="fas fa-star"></i> Top Spending Items</h5>
+                <small>Most expensive individual purchases</small>
+            </div>
+            <div class="card-body">
+                {% for item in top_items %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <span class="fw-bold">{{ item.item_name }}</span>
+                        <small class="text-muted">({{ item.frequency }}x)</small>
+                    </div>
+                    <span class="badge bg-secondary">${{ "%.2f"|format(item.total) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Weekly Trends Chart -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-line"></i> Weekly Spending Trends</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="weeklyTrendsChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Advanced Charts -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-area"></i> Category Trends (6 Months)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="categoryTrendsChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-bar"></i> Daily Average by Week</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="weeklyAveragesChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5><i class="fas fa-calculator"></i> Key Insights</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="analytics-metric">
+                            <h6>Daily Average (30d)</h6>
+                            <h4>${{ "%.2f"|format(monthly_total / 30) }}</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="analytics-metric">
+                            <h6>Weekly Average (90d)</h6>
+                            <h4>${{ "%.2f"|format(quarterly_total / 13) }}</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="analytics-metric">
+                            <h6>Projected Monthly</h6>
+                            <h4>${{ "%.2f"|format((weekly_total / 7) * 30) }}</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="analytics-metric">
+                            <h6>Budget Efficiency</h6>
+                            <h4 class="{% if monthly_total <= 500 %}text-success{% else %}text-danger{% endif %}">
+                                {{ "%.1f"|format((monthly_total / 500) * 100) }}%
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Weekly Trends Chart
+const weeklyData = {{ weekly_trends | tojsonfilter | safe }};
+const weeklyCtx = document.getElementById('weeklyTrendsChart').getContext('2d');
+
+new Chart(weeklyCtx, {
+    type: 'line',
+    data: {
+        labels: weeklyData.map(w => `Week ${w.week.split('-')[1]}`),
+        datasets: [{
+            label: 'Weekly Spending',
+            data: weeklyData.map(w => w.total),
+            borderColor: 'rgb(54, 162, 235)',
+            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return '$' + value.toFixed(2);
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Fetch and display advanced analytics
+fetch('/api/analytics/detailed')
+    .then(response => response.json())
+    .then(data => {
+        // Category Trends Chart
+        if (data.category_trends.length > 0) {
+            const categoryCtx = document.getElementById('categoryTrendsChart').getContext('2d');
+            
+            // Process data for stacked chart
+            const months = [...new Set(data.category_trends.map(item => item.month))].sort();
+            const categories = [...new Set(data.category_trends.map(item => item.category))];
+            
+            const datasets = categories.map((category, index) => {
+                const colors = [
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 205, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(153, 102, 255, 0.8)',
+                    'rgba(255, 159, 64, 0.8)',
+                    'rgba(199, 199, 199, 0.8)'
+                ];
+                
+                return {
+                    label: category,
+                    data: months.map(month => {
+                        const item = data.category_trends.find(t => t.month === month && t.category === category);
+                        return item ? item.total : 0;
+                    }),
+                    backgroundColor: colors[index % colors.length],
+                    borderColor: colors[index % colors.length].replace('0.8', '1'),
+                    borderWidth: 1
+                };
+            });
+            
+            new Chart(categoryCtx, {
+                type: 'bar',
+                data: {
+                    labels: months,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true },
+                        y: { 
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toFixed(0);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Weekly Averages Chart
+        if (data.weekly_averages.length > 0) {
+            const avgCtx = document.getElementById('weeklyAveragesChart').getContext('2d');
+            
+            new Chart(avgCtx, {
+                type: 'bar',
+                data: {
+                    labels: data.weekly_averages.map(w => `Week ${w.week.split('-')[1]}`),
+                    datasets: [{
+                        label: 'Daily Average',
+                        data: data.weekly_averages.map(w => w.avg_daily),
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
