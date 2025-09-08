@@ -1,200 +1,269 @@
-# requirements.txt
-Flask==2.3.3
-Werkzeug==2.3.7
+# Personal Finance & Activity Tracker
 
-# setup.py or run.py
-from app import app, init_db
+A comprehensive Flask-based web application for tracking personal finances, daily activities, investment portfolio, and savings goals. Built with a focus on detailed analytics and insights into spending habits and lifestyle patterns.
 
-if __name__ == '__main__':
-    print("Initializing database...")
-    init_db()
-    print("Database initialized!")
-    print("Starting Flask app...")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+## 🌟 Features
 
----
+### 📊 Dashboard
+- **Budget Overview**: Visual progress bar with 14-day budget periods
+- **Real-time Spending Analytics**: Daily spend limits and remaining budget calculations
+- **Activity Statistics**: 30-day and all-time activity frequency tracking
+- **Enhanced Spending Categorization**: Automatic categorization of expenses by merchant/type
+- **Interactive Charts**: Powered by Chart.js for spending trends and activity visualization
 
-# PROJECT STRUCTURE
-Your project should be organized like this:
+### 💰 Spending Tracker
+- **Expense Management**: Add, view, and delete spending entries with date selection
+- **Smart Categorization**: Automatic categorization for TIMS, McDonalds, Dispo, LCBO, Gas, Food, and more
+- **Budget Period Tracking**: 14-day rolling budget periods with detailed breakdowns
+- **Daily & Period Totals**: Real-time calculation of spending against budget limits
 
-finance_tracker/
-├── app.py                 # Main Flask application
-├── requirements.txt       # Python dependencies
-├── run.py                # Application runner
-├── finance_tracker.db    # SQLite database (created automatically)
-├── templates/
-│   ├── base.html         # Base template
-│   ├── dashboard.html    # Dashboard page
-│   ├── personal.html     # Personal activities page
-│   └── spending.html     # Spending tracker page
-└── static/               # Static files (optional, using CDN for now)
+### 🏃‍♂️ Personal Activity Tracking
+- **Daily Activity Logging**: Track Gym, Jiu Jitsu, Skateboarding, Work, Coitus, Sauna, Supplements
+- **Notes Support**: Add detailed notes for each day's activities
+- **Historical Data**: View recent entries and patterns over time
+- **Percentage Analytics**: All-time activity frequency percentages
 
----
+### 📈 Advanced Analytics
+- **Rich Spending Insights**: Weekly, monthly, and quarterly spending analysis
+- **Detailed Category Breakdown**: Comprehensive categorization with frequency counts
+- **Top Items Analysis**: Most frequently purchased items and spending patterns
+- **Trend Visualization**: Interactive charts showing spending and activity trends over time
+- **Category Trends**: Visual representation of spending distribution across categories
 
-# INSTALLATION INSTRUCTIONS
+### 💼 Portfolio Management
+- **Investment Tracking**: Track stocks and ETFs with real-time price updates
+- **Performance Analytics**: Portfolio value tracking and performance metrics
+- **Automatic Updates**: Scheduled ETF price updates and portfolio rebalancing
+- **Individual Asset Management**: Add, update, and remove portfolio positions
 
-1. Create a new directory for your project:
-   mkdir finance_tracker
-   cd finance_tracker
+### 💎 Savings Calculator
+- **Expense Planning**: Track and categorize various expense types
+- **Savings Goals**: Calculate required savings for planned expenses
+- **Default Expense Management**: Set up recurring or standard expense amounts
+- **Configuration Settings**: Customize savings calculations and parameters
 
-2. Create a virtual environment:
-   python -m venv venv
+### 🔒 Privacy Features
+- **Hidden Content Toggle**: Discretely hide sensitive activity data with a toggle button
+- **Secure Data Storage**: Local SQLite database with no external data sharing
+
+## 🛠️ Technical Stack
+
+- **Backend**: Flask 2.3.3 (Python web framework)
+- **Database**: SQLite with automatic schema management
+- **Frontend**: Bootstrap 5, Chart.js, vanilla JavaScript
+- **Data Processing**: Pandas 2.0.3, openpyxl 3.1.2
+- **Time Handling**: pytz 2023.3 (Toronto timezone support)
+- **HTTP Requests**: requests 2.31.0 for external API calls
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.11+
+- pip package manager
+
+### Installation
+
+1. **Clone or download the project**:
+   ```bash
+   cd personalWebApp
+   ```
+
+2. **Set up virtual environment**:
+   ```bash
+   python -m venv virtualEnv
+   
+   # On Linux/macOS:
+   source virtualEnv/bin/activate
    
    # On Windows:
-   venv\Scripts\activate
-   
-   # On macOS/Linux:
-   source venv/bin/activate
+   virtualEnv\Scripts\activate
+   ```
 
-3. Install dependencies:
-   pip install flask
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-4. Create the files:
-   - Copy the Flask app code into app.py
-   - Create templates/ directory
-   - Copy each HTML template into the templates/ directory
-   - Create run.py with the setup code above
+4. **Run the application**:
+   ```bash
+   python app.py
+   ```
 
-5. Run the application:
-   python run.py
+5. **Access the application**:
+   Open your browser and navigate to `http://localhost:5001`
 
-6. Open your browser and go to:
-   http://localhost:5000
+### 🐳 Docker Deployment
 
----
+The application includes Docker support for easy deployment:
 
-# FEATURES IMPLEMENTED
+```bash
+# Build and run with Docker Compose
+docker-compose up --build
 
-✅ Dashboard with:
-   - Budget overview and progress bar
-   - Activity statistics (last 30 days)
-   - Spending by category breakdown
-   - Interactive charts for spending trends and activity frequency
+# Access at http://localhost:5001
+```
 
-✅ Personal Activities Tab:
-   - Toggle switches for: Gym, Jiu Jitsu, Skateboarding, Work, Coitus, Sauna, Supplements
-   - Date picker (defaults to today)
-   - Notes field for additional details
-   - Recent entries display
+## 📁 Project Structure
 
-✅ Spending Tab:
-   - Add expenses with item name and price
-   - Date picker (defaults to today)
-   - Current budget period display
-   - Today's total, period total, and remaining budget
-   - Delete functionality for expenses
-   - Organized by date with timestamps
+```
+personalWebApp/
+├── app.py                          # Main Flask application
+├── requirements.txt                # Python dependencies
+├── finance_tracker.db             # SQLite database (auto-created)
+├── docker-compose.yml             # Docker orchestration
+├── Dockerfile                     # Container configuration
+├── CLAUDE.md                      # Development instructions
+├── templates/                     # Jinja2 HTML templates
+│   ├── base.html                 # Base layout template
+│   ├── dashboard.html            # Main dashboard
+│   ├── analytics.html            # Advanced analytics
+│   ├── personal.html             # Activity tracking
+│   ├── spending.html             # Expense management
+│   ├── portfolio.html            # Investment tracking
+│   └── savings.html              # Savings calculator
+├── static/                       # Static assets
+├── img/                          # Images and icons
+├── favicon_io/                   # Favicon files
+├── virtualEnv/                   # Python virtual environment
+├── auto_portfolio_update.py      # Portfolio automation script
+├── update_portfolio.py           # Manual portfolio updater
+├── setup_savings_table.py        # Database setup utility
+├── daily_update.sh              # Automated daily updates
+└── migration scripts/            # Data migration utilities
+```
 
-✅ Database:
-   - SQLite database for easy setup
-   - Automatic table creation
-   - Budget period management (14-day cycles)
-   - Data persistence
+## 🎯 Key Features Explained
 
-✅ Analytics:
-   - REST API endpoint for chart data
-   - Interactive charts using Chart.js
-   - Categorization of spending (Coffee, Gas, Food, Cannabis, Other)
-   - Activity frequency tracking
+### Budget Management
+- **14-Day Cycles**: Budget periods reset every 14 days automatically
+- **Dynamic Calculations**: Real-time daily spend limits based on remaining budget and days
+- **Default Budget**: $500 CAD per period (configurable)
 
----
+### Smart Categorization
+The application automatically categorizes expenses based on keywords:
+- **TIMS**: Tim Hortons purchases
+- **McDonalds**: McDonald's purchases  
+- **Dispo**: Cannabis dispensary purchases
+- **LCBO**: Alcohol purchases
+- **Gas**: Fuel and gas station purchases
+- **Food**: Restaurant and food purchases
+- **Fitness**: Gym and workout expenses
+- **Car Care**: Car wash and maintenance
+- **Other**: Miscellaneous expenses
 
-# CUSTOMIZATION OPTIONS
+### Activity Tracking
+Tracks daily activities with percentage analytics:
+- **Gym**: Workout sessions
+- **Jiu Jitsu**: Martial arts training
+- **Skateboarding**: Recreation activity
+- **Work**: Work days
+- **Coitus**: Personal activity (can be hidden)
+- **Sauna**: Wellness activity
+- **Supplements**: Daily supplement intake
 
-Budget Amount:
-- Default is $500 per 14-day period
-- Can be modified in the get_current_budget_period() function
+### Analytics Dashboard
+- **Spending Trends**: Visual charts showing spending patterns over time
+- **Activity Frequency**: Percentage-based activity analytics
+- **Category Breakdown**: Pie charts and bar graphs for spending distribution
+- **Time-based Analysis**: Weekly, monthly, and quarterly spending summaries
 
-Activities:
-- Easy to add/remove activities by modifying the database schema and forms
-- Icons and colors can be customized in the HTML templates
+## 🔧 Configuration
 
-Categories:
-- Spending categorization logic is in the dashboard route
-- Add more categories by modifying the SQL CASE statement
+### Database
+The application uses SQLite with automatic table creation. Database file: `finance_tracker.db`
 
-Styling:
-- Using Bootstrap 5 for responsive design
-- Custom CSS in base.html for toggle switches and cards
-- Easy to modify colors and layout
+### Timezone
+Configured for Toronto timezone (`America/Toronto`) using pytz.
 
----
+### Budget Settings
+Default budget amount can be modified in the `get_current_budget_period()` function in `app.py`.
 
-# DATA MIGRATION (Optional)
+## 📱 API Endpoints
 
-If you want to import your existing Excel data:
+The application provides REST API endpoints for data access:
 
-1. Create a migration script:
+- `GET /api/analytics` - General analytics data
+- `GET /api/analytics/detailed` - Detailed category analytics  
+- `GET /api/analytics/activities` - Activity frequency data
+- `GET /api/portfolio` - Portfolio holdings and performance
+- `POST /api/portfolio/update_daily` - Update portfolio values
+- `POST /api/portfolio/auto_update` - Trigger automatic updates
+
+## 🔄 Automation
+
+### Portfolio Updates
+- Automatic ETF price updates via scheduled scripts
+- Real-time portfolio value calculations
+- Performance tracking over time
+
+### Daily Updates
+The `daily_update.sh` script can be scheduled via cron for automated daily tasks.
+
+## 🛡️ Security & Privacy
+
+- **Local Storage**: All data stored locally in SQLite database
+- **No External Sharing**: Personal data never transmitted to external services
+- **Privacy Toggle**: Ability to hide sensitive activity data
+- **Secure Sessions**: Flask session management with secret key
+
+## 🚀 Future Enhancements
+
+Potential improvements identified in development:
+- User authentication for multi-user support
+- Mobile app development using Flask API
+- Bank API integration for automatic transaction import
+- Advanced goal setting and achievement tracking
+- Data export functionality (CSV, PDF reports)
+- Backup and sync capabilities
+- Push notifications for budget alerts
+- Monthly/yearly reporting dashboards
+
+## 🤝 Contributing
+
+This is a personal finance application. If you'd like to adapt it for your own use:
+
+1. Fork the repository
+2. Customize categories and activities for your needs
+3. Modify budget periods and amounts as required
+4. Adapt the categorization logic in the SQL queries
+
+## 📄 License
+
+Personal use application. Feel free to adapt for your own financial tracking needs.
+
+## 🆘 Troubleshooting
+
+### Common Issues
+
+1. **Database Errors**:
+   - Delete `finance_tracker.db` and restart the app
+   - Database will be recreated automatically
+
+2. **Port Conflicts**:
+   - Change port in `app.py` from 5001 to another available port
+   - Update `docker-compose.yml` port mapping accordingly
+
+3. **Template Not Found**:
+   - Ensure `templates/` directory exists in the same location as `app.py`
+   - Check template file names match the routes
+
+4. **Charts Not Loading**:
+   - Check internet connection (Chart.js loads from CDN)
+   - Verify browser console for JavaScript errors
+
+5. **Docker Issues**:
+   - Ensure Docker and Docker Compose are installed
+   - Check port 5001 is not in use by other services
+
+### Development Mode
+
+To run in development mode with debug enabled:
 
 ```python
-import sqlite3
-import pandas as pd
-from datetime import datetime
-
-def migrate_excel_data():
-    # Read your Excel files
-    personal_df = pd.read_excel('Personal Log.xlsx', sheet_name='Life')
-    
-    # Connect to database
-    conn = sqlite3.connect('finance_tracker.db')
-    cursor = conn.cursor()
-    
-    # Migrate personal data
-    for _, row in personal_df.iterrows():
-        if pd.notna(row['Date']):
-            cursor.execute('''
-                INSERT OR REPLACE INTO personal_log 
-                (date, gym, jiu_jitsu, skateboarding, work, coitus, sauna, supplements, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                row['Date'].strftime('%Y-%m-%d'),
-                1 if row.get('Gym') == 'Yes' else 0,
-                1 if row.get('Jiu Jitsu') == 'Yes' else 0,
-                1 if row.get('Skateboard') == 'Yes' else 0,
-                1 if row.get('Work') == 'Yes' else 0,
-                1 if row.get('Coitus') == 'Yes' else 0,
-                1 if row.get('Sauna') == 'Yes' else 0,
-                1 if row.get('Supplements') == 'Yes' else 0,
-                row.get('What ', '')
-            ))
-    
-    conn.commit()
-    conn.close()
-    print("Migration completed!")
-
-# Run migration
-migrate_excel_data()
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5001)
 ```
 
 ---
 
-# TROUBLESHOOTING
-
-1. If templates aren't found:
-   - Make sure templates/ folder is in the same directory as app.py
-   - Check that all template files are properly named
-
-2. If database errors occur:
-   - Delete finance_tracker.db and restart the app
-   - The database will be recreated automatically
-
-3. If charts don't load:
-   - Check browser console for JavaScript errors
-   - Ensure internet connection for CDN resources
-
-4. Port already in use:
-   - Change port in app.run() to a different number (e.g., 5001)
-
----
-
-# NEXT STEPS / ENHANCEMENTS
-
-Possible future improvements:
-- User authentication and multiple users
-- Data export functionality
-- Mobile app using Flask API
-- Advanced analytics and goal setting
-- Integration with bank APIs
-- Backup and sync features
-- Monthly/yearly reporting
-- Budget alerts and notifications
+**Note**: This application is designed for personal use and includes tracking of personal activities. The privacy toggle feature allows hiding sensitive data when needed.
