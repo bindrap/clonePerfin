@@ -55,6 +55,10 @@
                    href="{{ url_for('spending') }}">
                     <i class="fas fa-wallet"></i> Spending
                 </a>
+                <a class="nav-link {% if request.endpoint == 'savings' %}active{% endif %}" 
+                    href="{{ url_for('savings') }}">
+                    <i class="fas fa-piggy-bank"></i> Savings
+                </a>
                 <a class="nav-link {% if request.endpoint == 'analytics' %}active{% endif %}" 
                    href="{{ url_for('analytics') }}">
                     <i class="fas fa-chart-bar"></i> Analytics
@@ -413,6 +417,56 @@
     </style>
     
     <script>
+        function updateCoitusVisibility() {
+            const heartIcon = document.getElementById('heartIcon');
+            
+            // Find all coitus-related elements more comprehensively
+            const coitusElements = [];
+            
+            // Find elements with coitus-specific text content (but exclude large containers)
+            const allElements = document.querySelectorAll('span, small, div.col-md-3, div.col-lg-2, div.stat-card, div.activity-toggle, div.badge, label, input[name="coitus"], textarea, button');
+            allElements.forEach(el => {
+                const text = el.textContent || el.innerText || '';
+                const inputName = el.name || '';
+                if ((text.includes('❤️') || text.includes('Coitus') || inputName === 'coitus') && 
+                    !el.classList.contains('container') && 
+                    !el.classList.contains('row') && 
+                    !el.id.includes('coitusToggle')) {
+                    coitusElements.push(el);
+                    // Also hide parent activity-toggle if it's a coitus input
+                    if (el.closest('.activity-toggle') && (inputName === 'coitus' || text.includes('❤️'))) {
+                        coitusElements.push(el.closest('.activity-toggle'));
+                    }
+                }
+            });
+            
+            // Also find elements with coitus-element class (for dashboard stats)
+            const coitusElementClass = document.querySelectorAll('.coitus-element');
+            coitusElementClass.forEach(el => coitusElements.push(el));
+            
+            // Apply visibility changes
+            coitusElements.forEach(el => {
+                if (coitusVisible) {
+                    el.classList.remove('coitus-hidden');
+                } else {
+                    el.classList.add('coitus-hidden');
+                }
+            });
+            
+            // Update heart icon appearance
+            if (heartIcon) {
+                if (coitusVisible) {
+                    heartIcon.classList.remove('dimmed');
+                } else {
+                    heartIcon.classList.add('dimmed');
+                }
+            }
+            
+            // Trigger chart updates if available (for dashboard activity chart)
+            if (typeof updateActivityChart === 'function') {
+                updateActivityChart();
+            }
+        }
         // Coitus visibility toggle functionality - reset to visible by default for safety
         let coitusVisible = localStorage.getItem('coitusVisible') !== 'false';
         // Emergency reset if page seems broken

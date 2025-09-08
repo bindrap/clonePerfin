@@ -14,8 +14,11 @@
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="card">
-            <div class="card-header bg-primary text-white">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5><i class="fas fa-piggy-bank"></i> Current Budget Period</h5>
+                <button class="btn btn-sm btn-light" onclick="openBudgetModal()">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
             </div>
             <div class="card-body">
                 <p><strong>Period:</strong> {{ budget_period.start_date }} to {{ budget_period.end_date }}</p>
@@ -96,7 +99,7 @@
                             <small class="text-muted">({{ activity_percentages.work_percentage }}% overall)</small>
                         </div>
                     </div>
-                    <div class="col-lg-2 col-md-3 col-6">
+                    <div class="col-lg-2 col-md-3 col-6 coitus-element">
                         <div class="stat-card">
                             <div class="stat-number text-dark">{{ activity_stats.coitus_count or 0 }}</div>
                             <div>Coitus</div>
@@ -148,10 +151,107 @@
         </div>
     </div>
 </div>
+
+<!-- Budget Update Modal - Completely Rewritten -->
+<div id="budgetModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999999;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; min-width: 400px; z-index: 1000000;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
+            <h5 style="margin: 0; color: #333;"><i class="fas fa-edit"></i> Update Budget Amount</h5>
+            <button onclick="closeBudgetModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+        </div>
+        
+        <form id="budgetForm" method="POST" action="{{ url_for('update_budget') }}">
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Budget Amount ($)</label>
+                <input type="number" id="budgetAmountInput" name="budget_amount" 
+                       step="0.01" min="1" value="{{ budget_period.budget_amount }}" required
+                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+                <small style="color: #666; margin-top: 5px; display: block;">
+                    Current period: {{ budget_period.start_date }} to {{ budget_period.end_date }}
+                </small>
+            </div>
+            
+            <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
+                <h6 style="margin: 0 0 10px 0; color: #333;"><i class="fas fa-info-circle"></i> Current Status</h6>
+                <p style="margin: 5px 0; color: #333;">Spent: ${{ "%.2f"|format(total_spent) }}</p>
+                <p style="margin: 5px 0; color: #333;">Days left: {{ days_left }}</p>
+                <p style="margin: 5px 0; color: #333;">
+                    <strong>New daily limit: $<span id="newDailyLimitDisplay">{{ "%.2f"|format(daily_spend_limit) }}</span></strong>
+                </p>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" onclick="closeBudgetModal()" 
+                        style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    <i class="fas fa-save"></i> Update Budget
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// Global variables for budget calculation
+const totalSpent = {{ total_spent }};
+const daysLeft = {{ days_left }};
+
+// Custom modal functions
+function openBudgetModal() {
+    document.getElementById('budgetModalOverlay').style.display = 'block';
+    document.body.style.overflow = 'hidden'; // Prevent scrolling
+    
+    // Focus on input after a brief delay
+    setTimeout(() => {
+        const input = document.getElementById('budgetAmountInput');
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }, 100);
+}
+
+function closeBudgetModal() {
+    document.getElementById('budgetModalOverlay').style.display = 'none';
+    document.body.style.overflow = 'auto'; // Restore scrolling
+}
+
+// Close modal when clicking overlay
+document.getElementById('budgetModalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeBudgetModal();
+    }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeBudgetModal();
+    }
+});
+
+// Update daily limit calculation when budget amount changes
+document.addEventListener('DOMContentLoaded', function() {
+    const budgetInput = document.getElementById('budgetAmountInput');
+    if (budgetInput) {
+        budgetInput.addEventListener('input', function() {
+            const newBudget = parseFloat(this.value) || 0;
+            const remaining = newBudget - totalSpent;
+            const newDailyLimit = remaining / Math.max(daysLeft, 1);
+            
+            const displayElement = document.getElementById('newDailyLimitDisplay');
+            if (displayElement) {
+                displayElement.textContent = newDailyLimit.toFixed(2);
+            }
+        });
+    }
+});
+
 // Fetch analytics data and create charts
 fetch('/api/analytics')
     .then(response => response.json())
@@ -189,38 +289,76 @@ fetch('/api/analytics')
             }
         });
 
-        // Activity Chart - Updated to include coitus
+        // Activity Chart - Updated to hide coitus when visibility is toggled
         const activityCtx = document.getElementById('activityChart').getContext('2d');
-        const activities = ['gym', 'jiu_jitsu', 'skateboarding', 'work', 'coitus', 'sauna', 'supplements'];
-        const activityCounts = activities.map(activity => {
+        
+        // Check coitus visibility setting
+        const coitusVisible = localStorage.getItem('coitusVisible') !== 'false';
+        
+        let activities, activityLabels, activityCounts;
+        
+        if (coitusVisible) {
+            activities = ['gym', 'jiu_jitsu', 'skateboarding', 'work', 'coitus', 'sauna', 'supplements'];
+            activityLabels = ['Gym', 'Jiu Jitsu', 'Skateboarding', 'Work', 'Coitus', 'Sauna', 'Supplements'];
+        } else {
+            activities = ['gym', 'jiu_jitsu', 'skateboarding', 'work', 'sauna', 'supplements'];
+            activityLabels = ['Gym', 'Jiu Jitsu', 'Skateboarding', 'Work', 'Sauna', 'Supplements'];
+        }
+        
+        activityCounts = activities.map(activity => {
             return data.daily_activities.reduce((sum, day) => sum + (day[activity] || 0), 0);
         });
         
-        new Chart(activityCtx, {
+        // Colors excluding coitus when hidden
+        let backgroundColors, borderColors;
+        if (coitusVisible) {
+            backgroundColors = [
+                'rgba(255, 99, 132, 0.2)',
+                'rgba(54, 162, 235, 0.2)',
+                'rgba(255, 205, 86, 0.2)',
+                'rgba(75, 192, 192, 0.2)',
+                'rgba(153, 102, 255, 0.2)',
+                'rgba(255, 159, 64, 0.2)',
+                'rgba(199, 199, 199, 0.2)'
+            ];
+            borderColors = [
+                'rgba(255, 99, 132, 1)',
+                'rgba(54, 162, 235, 1)',
+                'rgba(255, 205, 86, 1)',
+                'rgba(75, 192, 192, 1)',
+                'rgba(153, 102, 255, 1)',
+                'rgba(255, 159, 64, 1)',
+                'rgba(199, 199, 199, 1)'
+            ];
+        } else {
+            backgroundColors = [
+                'rgba(255, 99, 132, 0.2)',
+                'rgba(54, 162, 235, 0.2)',
+                'rgba(255, 205, 86, 0.2)',
+                'rgba(75, 192, 192, 0.2)',
+                'rgba(255, 159, 64, 0.2)',
+                'rgba(199, 199, 199, 0.2)'
+            ];
+            borderColors = [
+                'rgba(255, 99, 132, 1)',
+                'rgba(54, 162, 235, 1)',
+                'rgba(255, 205, 86, 1)',
+                'rgba(75, 192, 192, 1)',
+                'rgba(255, 159, 64, 1)',
+                'rgba(199, 199, 199, 1)'
+            ];
+        }
+        
+        // Store chart reference for later updates
+        window.activityChart = new Chart(activityCtx, {
             type: 'bar',
             data: {
-                labels: ['Gym', 'Jiu Jitsu', 'Skateboarding', 'Work', 'Coitus', 'Sauna', 'Supplements'],
+                labels: activityLabels,
                 datasets: [{
                     label: 'Activity Count',
                     data: activityCounts,
-                    backgroundColor: [
-                        'rgba(255, 99, 132, 0.2)',
-                        'rgba(54, 162, 235, 0.2)',
-                        'rgba(255, 205, 86, 0.2)',
-                        'rgba(75, 192, 192, 0.2)',
-                        'rgba(153, 102, 255, 0.2)',
-                        'rgba(255, 159, 64, 0.2)',
-                        'rgba(199, 199, 199, 0.2)'
-                    ],
-                    borderColor: [
-                        'rgba(255, 99, 132, 1)',
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 205, 86, 1)',
-                        'rgba(75, 192, 192, 1)',
-                        'rgba(153, 102, 255, 1)',
-                        'rgba(255, 159, 64, 1)',
-                        'rgba(199, 199, 199, 1)'
-                    ],
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
                     borderWidth: 1
                 }]
             },
@@ -235,5 +373,68 @@ fetch('/api/analytics')
             }
         });
     });
+
+// Function to update the activity chart when coitus visibility changes
+function updateActivityChart() {
+    if (window.activityChart) {
+        // Re-fetch data and update chart
+        fetch('/api/analytics')
+            .then(response => response.json())
+            .then(data => {
+                const coitusVisible = localStorage.getItem('coitusVisible') !== 'false';
+                
+                let activities, activityLabels, activityCounts;
+                
+                if (coitusVisible) {
+                    activities = ['gym', 'jiu_jitsu', 'skateboarding', 'work', 'coitus', 'sauna', 'supplements'];
+                    activityLabels = ['Gym', 'Jiu Jitsu', 'Skateboarding', 'Work', 'Coitus', 'Sauna', 'Supplements'];
+                } else {
+                    activities = ['gym', 'jiu_jitsu', 'skateboarding', 'work', 'sauna', 'supplements'];
+                    activityLabels = ['Gym', 'Jiu Jitsu', 'Skateboarding', 'Work', 'Sauna', 'Supplements'];
+                }
+                
+                activityCounts = activities.map(activity => {
+                    return data.daily_activities.reduce((sum, day) => sum + (day[activity] || 0), 0);
+                });
+                
+                // Update chart data
+                window.activityChart.data.labels = activityLabels;
+                window.activityChart.data.datasets[0].data = activityCounts;
+                
+                // Update colors
+                if (coitusVisible) {
+                    window.activityChart.data.datasets[0].backgroundColor = [
+                        'rgba(255, 99, 132, 0.2)', 'rgba(54, 162, 235, 0.2)', 'rgba(255, 205, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)', 'rgba(153, 102, 255, 0.2)', 'rgba(255, 159, 64, 0.2)',
+                        'rgba(199, 199, 199, 0.2)'
+                    ];
+                    window.activityChart.data.datasets[0].borderColor = [
+                        'rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(255, 205, 86, 1)',
+                        'rgba(75, 192, 192, 1)', 'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)',
+                        'rgba(199, 199, 199, 1)'
+                    ];
+                } else {
+                    window.activityChart.data.datasets[0].backgroundColor = [
+                        'rgba(255, 99, 132, 0.2)', 'rgba(54, 162, 235, 0.2)', 'rgba(255, 205, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)', 'rgba(255, 159, 64, 0.2)', 'rgba(199, 199, 199, 0.2)'
+                    ];
+                    window.activityChart.data.datasets[0].borderColor = [
+                        'rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(255, 205, 86, 1)',
+                        'rgba(75, 192, 192, 1)', 'rgba(255, 159, 64, 1)', 'rgba(199, 199, 199, 1)'
+                    ];
+                }
+                
+                window.activityChart.update();
+            });
+    }
+}
+
+// Hook into the coitus visibility toggle
+const originalToggleCoitusVisibility = window.toggleCoitusVisibility;
+window.toggleCoitusVisibility = function() {
+    originalToggleCoitusVisibility();
+    // Small delay to ensure DOM updates are complete
+    setTimeout(updateActivityChart, 100);
+};
 </script>
 {% endblock %}

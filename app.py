@@ -5,6 +5,8 @@ import os
 import json
 import pytz
 from functools import wraps
+import subprocess
+import threading
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
@@ -643,11 +645,19 @@ def api_analytics():
         activity_dict['date'] = activity_dict['date'].strftime('%Y-%m-%d') if activity_dict['date'] else ''
         daily_activities.append(activity_dict)
     
+    # Get current budget info
+    budget_period = get_current_budget_period()
+    
     conn.close()
     
     return jsonify({
         'daily_spending': complete_spending,
-        'daily_activities': daily_activities
+        'daily_activities': daily_activities,
+        'current_budget': {
+            'amount': float(budget_period['budget_amount']),
+            'start_date': budget_period['start_date'],
+            'end_date': budget_period['end_date']
+        }
     })
 
 @app.route('/api/analytics/detailed')
@@ -759,21 +769,84 @@ def api_activity_analytics():
         'work_percentage': (stats['work_days'] / total_days) * 100,
     }
     
-    # Weekly activity patterns (last 12 weeks)
+    # Weekly activity patterns - now including coitus and supplements
+    today = get_toronto_date()
+    twelve_weeks_ago = today - timedelta(weeks=12)
+    
     cursor.execute('''
         SELECT 
-            strftime('%Y-%W', date) as week,
-            SUM(gym) as gym,
-            SUM(jiu_jitsu) as jiu_jitsu,
-            SUM(work) as work,
-            SUM(skateboarding) as skateboarding
+            date,
+            gym,
+            jiu_jitsu,
+            work,
+            skateboarding,
+            coitus,
+            supplements
         FROM personal_log 
-        WHERE date >= date('now', '-12 weeks')
-        GROUP BY strftime('%Y-%W', date)
-        ORDER BY week DESC
-        LIMIT 12
-    ''')
-    weekly_patterns = [dict(row) for row in cursor.fetchall()]
+        WHERE date >= ?
+        ORDER BY date
+    ''', (twelve_weeks_ago,))
+    
+    daily_results = cursor.fetchall()
+    
+    # Group by week manually to ensure proper data structure
+    weekly_data = {}
+    
+    for row in daily_results:
+        row_date = row['date']
+        if isinstance(row_date, str):
+            row_date = datetime.strptime(row_date, '%Y-%m-%d').date()
+        
+        # Calculate week number (ISO week)
+        year, week_num, _ = row_date.isocalendar()
+        week_key = f"{year}-W{week_num:02d}"
+        
+        if week_key not in weekly_data:
+            weekly_data[week_key] = {
+                'week_key': week_key,
+                'week_num': week_num,
+                'year': year,
+                'gym': 0,
+                'jiu_jitsu': 0,
+                'work': 0,
+                'skateboarding': 0,
+                'coitus': 0,
+                'supplements': 0,
+                'start_date': row_date
+            }
+        
+        # Sum up activities for the week
+        weekly_data[week_key]['gym'] += row['gym'] or 0
+        weekly_data[week_key]['jiu_jitsu'] += row['jiu_jitsu'] or 0
+        weekly_data[week_key]['work'] += row['work'] or 0
+        weekly_data[week_key]['skateboarding'] += row['skateboarding'] or 0
+        weekly_data[week_key]['coitus'] += row['coitus'] or 0
+        weekly_data[week_key]['supplements'] += row['supplements'] or 0
+    
+    # Convert to list and sort by date
+    weekly_patterns = list(weekly_data.values())
+    weekly_patterns.sort(key=lambda x: x['start_date'])
+    
+    # Format for chart display and limit to last 12 weeks
+    weekly_patterns = weekly_patterns[-12:]
+    
+    # Create readable week labels
+    formatted_patterns = []
+    for week_data in weekly_patterns:
+        # Create a more readable week label
+        start_date = week_data['start_date']
+        month_name = start_date.strftime('%b')
+        week_label = f"W{week_data['week_num']} ({month_name})"
+        
+        formatted_patterns.append({
+            'week': week_label,
+            'gym': week_data['gym'],
+            'jiu_jitsu': week_data['jiu_jitsu'],
+            'work': week_data['work'],
+            'skateboarding': week_data['skateboarding'],
+            'coitus': week_data['coitus'],
+            'supplements': week_data['supplements']
+        })
     
     # Calculate current streaks
     cursor.execute('''
@@ -820,9 +893,9 @@ def api_activity_analytics():
     if activity_stats['jj_percentage'] > 40:
         insights.append(f"Strong jiu jitsu practice at {activity_stats['jj_percentage']:.0f}% of days")
     if gym_streak > 3:
-        insights.append(f"You're on a {gym_streak}-day gym streak! 💪")
+        insights.append(f"You're on a {gym_streak}-day gym streak!")
     if jj_streak > 2:
-        insights.append(f"Current jiu jitsu streak: {jj_streak} days 🥋")
+        insights.append(f"Current jiu jitsu streak: {jj_streak} days")
     if activity_stats['work_percentage'] > 60:
         insights.append(f"High work consistency at {activity_stats['work_percentage']:.0f}% of tracked days")
     
@@ -833,7 +906,7 @@ def api_activity_analytics():
     
     return jsonify({
         'activity_stats': activity_stats,
-        'weekly_patterns': weekly_patterns,
+        'weekly_patterns': formatted_patterns,
         'streaks': streaks,
         'insights': insights
     })
@@ -930,6 +1003,118 @@ def update_portfolio_daily():
         'difference_from_yesterday': difference
     })
 
+# Add these new routes to your app.py file
+
+@app.route('/budget/update', methods=['POST'])
+def update_budget():
+    """Update budget amount for current budget period"""
+    new_budget = request.form.get('budget_amount')
+    
+    try:
+        new_budget_float = float(new_budget)
+        if new_budget_float <= 0:
+            flash('Budget amount must be greater than 0', 'error')
+            return redirect(url_for('dashboard'))
+    except (TypeError, ValueError):
+        flash('Please provide a valid budget amount', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Get current budget period
+    budget_period = get_current_budget_period()
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Update the current budget period
+    cursor.execute('''
+        UPDATE budget_periods 
+        SET budget_amount = ?
+        WHERE id = ?
+    ''', (new_budget_float, budget_period['id']))
+    
+    conn.commit()
+    conn.close()
+    
+    flash(f'Budget updated to ${new_budget_float:.2f} for current period', 'success')
+    return redirect(url_for('dashboard'))
+
+@app.route('/portfolio/auto_update_trigger', methods=['POST'])
+def trigger_auto_update():
+    """Trigger the auto portfolio update script"""
+    try:
+        # Path to your auto update script
+        script_path = os.path.join(os.path.dirname(__file__), 'auto_portfolio_update.py')
+        
+        if not os.path.exists(script_path):
+            return jsonify({
+                'error': 'Auto update script not found',
+                'message': 'Please ensure auto_portfolio_update.py is in the same directory as app.py'
+            }), 404
+        
+        # Run the script in the background
+        def run_update():
+            try:
+                result = subprocess.run([
+                    'python3', script_path
+                ], capture_output=True, text=True, timeout=60)
+                
+                if result.returncode == 0:
+                    print("Portfolio auto-update completed successfully")
+                    print(f"Output: {result.stdout}")
+                else:
+                    print(f"Portfolio auto-update failed: {result.stderr}")
+            except subprocess.TimeoutExpired:
+                print("Portfolio auto-update timed out after 60 seconds")
+            except Exception as e:
+                print(f"Error running portfolio auto-update: {e}")
+        
+        # Start the update in a background thread
+        update_thread = threading.Thread(target=run_update)
+        update_thread.daemon = True
+        update_thread.start()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Portfolio auto-update started in background'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'error': 'Failed to trigger auto-update',
+            'message': str(e)
+        }), 500
+
+@app.route('/portfolio/last_update_status')
+def get_last_update_status():
+    """Get the status of the last portfolio update"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get the most recent portfolio entry
+    cursor.execute('''
+        SELECT date, total_portfolio_value, difference, 
+               datetime(date || ' 23:59:59') as last_update
+        FROM portfolio_log 
+        ORDER BY date DESC 
+        LIMIT 1
+    ''')
+    latest = cursor.fetchone()
+    
+    conn.close()
+    
+    if latest:
+        return jsonify({
+            'last_update_date': latest['date'],
+            'last_portfolio_value': latest['total_portfolio_value'],
+            'last_change': latest['difference'],
+            'needs_update': latest['date'] != get_toronto_date().strftime('%Y-%m-%d')
+        })
+    else:
+        return jsonify({
+            'last_update_date': None,
+            'needs_update': True
+        })
+    
 # Auto-fetch ETF prices endpoint (for future automation)
 @app.route('/api/portfolio/auto_update', methods=['POST'])
 def auto_update_portfolio():
@@ -943,6 +1128,453 @@ def auto_update_portfolio():
         'suggestion': 'Future versions will integrate with financial APIs for automatic updates'
     }), 501
 
+# Add these routes to your app.py file
+
+@app.route('/savings/update_expense/<int:expense_id>', methods=['POST'])
+def update_fixed_expense(expense_id):
+    """Update an existing fixed expense"""
+    try:
+        new_amount = float(request.form.get('amount', 0))
+        
+        if new_amount <= 0:
+            flash('Please enter a valid amount greater than 0', 'error')
+            return redirect(url_for('savings'))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get expense details
+        cursor.execute('SELECT expense_name FROM fixed_expenses WHERE id = ?', (expense_id,))
+        expense = cursor.fetchone()
+        
+        if not expense:
+            flash('Expense not found', 'error')
+            conn.close()
+            return redirect(url_for('savings'))
+        
+        # Update expense
+        cursor.execute('''
+            UPDATE fixed_expenses 
+            SET amount = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (new_amount, expense_id))
+        
+        conn.commit()
+        conn.close()
+        
+        flash(f'Updated "{expense["expense_name"]}" to ${new_amount:.2f}', 'success')
+        return redirect(url_for('savings'))
+        
+    except ValueError:
+        flash('Please enter a valid numeric amount', 'error')
+        return redirect(url_for('savings'))
+    except Exception as e:
+        flash(f'Error updating expense: {str(e)}', 'error')
+        return redirect(url_for('savings'))
+
+@app.route('/savings/delete_expense/<int:expense_id>', methods=['POST'])
+def delete_fixed_expense(expense_id):
+    """Delete a fixed expense"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get expense details before deleting
+        cursor.execute('SELECT expense_name FROM fixed_expenses WHERE id = ?', (expense_id,))
+        expense = cursor.fetchone()
+        
+        if not expense:
+            flash('Expense not found', 'error')
+            conn.close()
+            return redirect(url_for('savings'))
+        
+        # Delete expense
+        cursor.execute('DELETE FROM fixed_expenses WHERE id = ?', (expense_id,))
+        conn.commit()
+        conn.close()
+        
+        flash(f'Deleted expense "{expense["expense_name"]}"', 'success')
+        return redirect(url_for('savings'))
+        
+    except Exception as e:
+        flash(f'Error deleting expense: {str(e)}', 'error')
+        return redirect(url_for('savings'))
+
+@app.route('/savings')
+def savings():
+    """Savings allocation page with expense management"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get current savings configuration or create default
+    cursor.execute('SELECT * FROM savings_config ORDER BY id DESC LIMIT 1')
+    config = cursor.fetchone()
+    
+    if not config:
+        # Create default configuration
+        cursor.execute('''
+            INSERT INTO savings_config 
+            (savings_percentage, investorline_percentage, usd_percentage, 
+             biweekly_income, pay_period_half, created_at)
+            VALUES (40, 35, 25, 2000, 1, CURRENT_TIMESTAMP)
+        ''')
+        conn.commit()
+        cursor.execute('SELECT * FROM savings_config ORDER BY id DESC LIMIT 1')
+        config = cursor.fetchone()
+    
+    # Get CURRENT BUDGET PERIOD instead of calendar month halves
+    budget_period = get_current_budget_period()
+    
+    # Use budget period dates
+    period_start = budget_period['start_date']
+    period_end = budget_period['end_date']
+    
+    # Convert string dates to date objects if needed
+    if isinstance(period_start, str):
+        period_start = datetime.strptime(period_start, '%Y-%m-%d').date()
+    if isinstance(period_end, str):
+        period_end = datetime.strptime(period_end, '%Y-%m-%d').date()
+    
+    today = get_toronto_date()
+    
+    # Determine which half we're in based on budget period progress
+    total_days = (period_end - period_start).days + 1
+    days_elapsed = (today - period_start).days + 1
+    
+    # If we're in the first half of the budget period, use half 1, otherwise half 2
+    current_half = 1 if days_elapsed <= (total_days / 2) else 2
+    
+    # Get spending for CURRENT BUDGET PERIOD (not calendar month)
+    cursor.execute('''
+        SELECT SUM(price) as total_spent
+        FROM spending_log 
+        WHERE date >= ? AND date <= ?
+    ''', (period_start, period_end))
+    
+    spending_result = cursor.fetchone()
+    current_spending = float(spending_result['total_spent']) if spending_result['total_spent'] else 0.0
+    
+    # Get ALL expenses from database (both custom and default)
+    cursor.execute('''
+        SELECT * FROM fixed_expenses 
+        ORDER BY pay_period_half, expense_name
+    ''')
+    all_expenses_raw = cursor.fetchall()
+    
+    # Organize expenses by pay period
+    first_half_expenses = {}
+    second_half_expenses = {}
+    
+    for expense in all_expenses_raw:
+        # FIXED: Access sqlite3.Row columns directly, not with .get()
+        try:
+            is_custom_value = expense['is_custom']
+        except (KeyError, IndexError):
+            is_custom_value = 1  # Default to custom if column doesn't exist
+            
+        expense_dict = {
+            'id': expense['id'],
+            'name': expense['expense_name'],
+            'amount': float(expense['amount']),
+            'is_custom': bool(is_custom_value)
+        }
+        
+        if expense['pay_period_half'] == 1:
+            first_half_expenses[expense['expense_name']] = expense_dict
+        else:
+            second_half_expenses[expense['expense_name']] = expense_dict
+    
+    # Create default expenses if they don't exist in database
+    default_expenses_1st = {
+        'Fit4less': 14.50,
+        'Jiu Jitsu': 125.00,
+        'Phone Bill': 45.20,
+        'Car Insurance': 180.00
+    }
+    
+    default_expenses_2nd = {
+        'Fit4less': 14.50,
+        'Ravi Syal': 69.88,
+        'Condo Insurance': 37.74
+    }
+    
+    # Add missing default expenses to database
+    for name, amount in default_expenses_1st.items():
+        if name not in first_half_expenses:
+            cursor.execute('''
+                INSERT INTO fixed_expenses (expense_name, amount, pay_period_half, is_custom, created_at)
+                VALUES (?, ?, 1, 0, CURRENT_TIMESTAMP)
+            ''', (name, amount))
+            first_half_expenses[name] = {
+                'id': cursor.lastrowid,
+                'name': name,
+                'amount': amount,
+                'is_custom': False
+            }
+    
+    for name, amount in default_expenses_2nd.items():
+        if name not in second_half_expenses:
+            cursor.execute('''
+                INSERT INTO fixed_expenses (expense_name, amount, pay_period_half, is_custom, created_at)
+                VALUES (?, ?, 2, 0, CURRENT_TIMESTAMP)
+            ''', (name, amount))
+            second_half_expenses[name] = {
+                'id': cursor.lastrowid,
+                'name': name,
+                'amount': amount,
+                'is_custom': False
+            }
+    
+    conn.commit()
+    
+    # Get current period expenses
+    if current_half == 1:
+        fixed_expenses = first_half_expenses
+    else:
+        fixed_expenses = second_half_expenses
+    
+    # Calculate total
+    total_fixed_expenses = sum(exp['amount'] for exp in fixed_expenses.values())
+    
+    # Get recent savings calculations
+    cursor.execute('''
+        SELECT * FROM savings_calculations 
+        ORDER BY created_at DESC 
+        LIMIT 5
+    ''')
+    recent_calculations = cursor.fetchall()
+    
+    conn.close()
+    
+    return render_template('savings.html',
+                         config=config,
+                         current_spending=current_spending,
+                         fixed_expenses=fixed_expenses,
+                         total_fixed_expenses=total_fixed_expenses,
+                         current_half=current_half,
+                         period_start=period_start,
+                         period_end=period_end,
+                         budget_period=budget_period,
+                         recent_calculations=recent_calculations,
+                         all_first_half=first_half_expenses,
+                         all_second_half=second_half_expenses,
+                         today=today)
+
+# Also fix the add_fixed_expense route to include is_custom:
+@app.route('/savings/add_expense', methods=['POST'])
+def add_fixed_expense():
+    """Add a new fixed expense"""
+    try:
+        expense_name = request.form.get('expense_name', '').strip()
+        amount = float(request.form.get('amount', 0))
+        pay_period_half = int(request.form.get('pay_period_half', 1))
+        
+        if not expense_name:
+            flash('Please enter a valid expense name', 'error')
+            return redirect(url_for('savings'))
+        
+        if amount <= 0:
+            flash('Please enter a valid amount greater than 0', 'error')
+            return redirect(url_for('savings'))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if expense already exists for this period
+        cursor.execute('''
+            SELECT id FROM fixed_expenses 
+            WHERE expense_name = ? AND pay_period_half = ?
+        ''', (expense_name, pay_period_half))
+        
+        if cursor.fetchone():
+            flash(f'Expense "{expense_name}" already exists for this pay period', 'error')
+            conn.close()
+            return redirect(url_for('savings'))
+        
+        # Add new expense (FIXED: Include is_custom column)
+        cursor.execute('''
+            INSERT INTO fixed_expenses (expense_name, amount, pay_period_half, is_custom, created_at)
+            VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+        ''', (expense_name, amount, pay_period_half))
+        
+        conn.commit()
+        conn.close()
+        
+        period_text = "1st half" if pay_period_half == 1 else "2nd half"
+        flash(f'Added expense "{expense_name}" (${amount:.2f}) to {period_text}', 'success')
+        return redirect(url_for('savings'))
+        
+    except ValueError:
+        flash('Please enter valid numeric values', 'error')
+        return redirect(url_for('savings'))
+    except Exception as e:
+        flash(f'Error adding expense: {str(e)}', 'error')
+        return redirect(url_for('savings'))
+
+@app.route('/savings/calculate', methods=['POST'])
+def calculate_savings():
+    """Calculate savings allocation based on income and expenses"""
+    try:
+        # Get form data
+        biweekly_income = float(request.form.get('biweekly_income', 0))
+        savings_percentage = float(request.form.get('savings_percentage', 40))
+        investorline_percentage = float(request.form.get('investorline_percentage', 35))
+        usd_percentage = float(request.form.get('usd_percentage', 25))
+        pay_period_half = int(request.form.get('pay_period_half', 1))
+        
+        # Validate percentages add up to 100
+        total_percentage = savings_percentage + investorline_percentage + usd_percentage
+        if abs(total_percentage - 100) > 0.01:
+            flash(f'Allocation percentages must add up to 100% (current: {total_percentage:.1f}%)', 'error')
+            return redirect(url_for('savings'))
+        
+        if biweekly_income <= 0:
+            flash('Please enter a valid biweekly income amount', 'error')
+            return redirect(url_for('savings'))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get CURRENT BUDGET PERIOD spending (not calendar month)
+        budget_period = get_current_budget_period()
+        period_start = budget_period['start_date']
+        period_end = budget_period['end_date']
+        
+        # Convert string dates to date objects if needed
+        if isinstance(period_start, str):
+            period_start = datetime.strptime(period_start, '%Y-%m-%d').date()
+        if isinstance(period_end, str):
+            period_end = datetime.strptime(period_end, '%Y-%m-%d').date()
+        
+        # Get actual spending from database for current budget period
+        cursor.execute('''
+            SELECT SUM(price) as total_spent
+            FROM spending_log 
+            WHERE date >= ? AND date <= ?
+        ''', (period_start, period_end))
+        
+        spending_result = cursor.fetchone()
+        current_spending = float(spending_result['total_spent']) if spending_result['total_spent'] else 0.0
+        
+        # Get fixed expenses from database for the selected period
+        cursor.execute('''
+            SELECT SUM(amount) as total_fixed
+            FROM fixed_expenses 
+            WHERE pay_period_half = ?
+        ''', (pay_period_half,))
+        
+        fixed_result = cursor.fetchone()
+        total_fixed_expenses = float(fixed_result['total_fixed']) if fixed_result['total_fixed'] else 0.0
+        
+        # Calculate totals - THIS IS THE KEY FIX
+        total_expenses = current_spending + total_fixed_expenses  # TOTAL expenses, not just fixed
+        available_for_allocation = biweekly_income - total_expenses
+        
+        if available_for_allocation <= 0:
+            flash(f'Warning: Expenses (${total_expenses:.2f}) exceed income (${biweekly_income:.2f})', 'warning')
+            available_for_allocation = 0
+        
+        # Calculate allocations
+        savings_amount = available_for_allocation * (savings_percentage / 100)
+        investorline_amount = available_for_allocation * (investorline_percentage / 100)
+        usd_amount = available_for_allocation * (usd_percentage / 100)
+        
+        # Update savings configuration
+        cursor.execute('''
+            INSERT INTO savings_config 
+            (savings_percentage, investorline_percentage, usd_percentage, 
+             biweekly_income, pay_period_half, created_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (savings_percentage, investorline_percentage, usd_percentage, 
+              biweekly_income, pay_period_half))
+        
+        # Save calculation results - FIXED: Save total_expenses instead of just fixed_expenses
+        cursor.execute('''
+            INSERT INTO savings_calculations 
+            (biweekly_income, current_spending, fixed_expenses, total_expenses,
+             available_for_allocation, savings_amount, investorline_amount, 
+             usd_amount, pay_period_half, period_start, period_end, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (biweekly_income, current_spending, total_fixed_expenses, total_expenses,  # FIXED: total_expenses
+              available_for_allocation, savings_amount, investorline_amount,
+              usd_amount, pay_period_half, period_start, period_end))
+        
+        conn.commit()
+        conn.close()
+        
+        flash('Savings allocation calculated successfully!', 'success')
+        return redirect(url_for('savings'))
+        
+    except ValueError as e:
+        flash('Please enter valid numeric values', 'error')
+        return redirect(url_for('savings'))
+    except Exception as e:
+        flash(f'Error calculating savings: {str(e)}', 'error')
+        return redirect(url_for('savings'))
+
+# You'll also need to add this new route for updating default expenses:
+@app.route('/savings/update_default_expense/<int:expense_id>', methods=['POST'])
+def update_default_expense(expense_id):
+    """Update a default expense (same as update_fixed_expense but for clarity)"""
+    return update_fixed_expense(expense_id)
+
+@app.route('/savings/update_config', methods=['POST'])
+def update_savings_config():
+    """Update savings configuration"""
+    try:
+        savings_percentage = float(request.form.get('savings_percentage', 40))
+        investorline_percentage = float(request.form.get('investorline_percentage', 35))
+        usd_percentage = float(request.form.get('usd_percentage', 25))
+        biweekly_income = float(request.form.get('biweekly_income', 2000))
+        
+        # Validate percentages
+        total_percentage = savings_percentage + investorline_percentage + usd_percentage
+        if abs(total_percentage - 100) > 0.01:
+            flash(f'Allocation percentages must add up to 100% (current: {total_percentage:.1f}%)', 'error')
+            return redirect(url_for('savings'))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO savings_config 
+            (savings_percentage, investorline_percentage, usd_percentage, 
+             biweekly_income, pay_period_half, created_at)
+            VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+        ''', (savings_percentage, investorline_percentage, usd_percentage, biweekly_income))
+        
+        conn.commit()
+        conn.close()
+        
+        flash('Savings configuration updated successfully!', 'success')
+        return redirect(url_for('savings'))
+        
+    except ValueError:
+        flash('Please enter valid numeric values', 'error')
+        return redirect(url_for('savings'))
+    except Exception as e:
+        flash(f'Error updating configuration: {str(e)}', 'error')
+        return redirect(url_for('savings'))
+
+@app.route('/savings/clear_calculations', methods=['POST'])
+def clear_savings_calculations():
+    """Clear all savings calculations"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Delete all calculations
+        cursor.execute('DELETE FROM savings_calculations')
+        conn.commit()
+        conn.close()
+        
+        flash('All savings calculations cleared successfully!', 'success')
+        return redirect(url_for('savings'))
+        
+    except Exception as e:
+        flash(f'Error clearing calculations: {str(e)}', 'error')
+        return redirect(url_for('savings'))
+    
 if __name__ == '__main__':
     # Add pytz to requirements
     app.run(debug=True, host='0.0.0.0', port=5001)

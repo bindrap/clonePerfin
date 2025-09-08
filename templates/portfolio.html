@@ -10,6 +10,25 @@
     </div>
 </div>
 
+<!-- Auto-Update Status Banner -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="alert alert-info" id="autoUpdateStatus">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-robot"></i> <strong>Auto-Update Status:</strong> 
+                    <span id="updateStatusText">Checking...</span>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-primary" onclick="triggerAutoUpdate()" id="autoUpdateBtn">
+                        <i class="fas fa-sync"></i> Trigger Auto-Update
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Portfolio Overview -->
 <div class="row mb-4">
     {% if latest_snapshot %}
@@ -68,7 +87,7 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-header bg-success text-white">
-                <h5><i class="fas fa-refresh"></i> Update ETF Market Values</h5>
+                <h5><i class="fas fa-refresh"></i> Manual ETF Value Update</h5>
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('update_portfolio') }}">
@@ -77,6 +96,7 @@
                         <input type="number" class="form-control" id="nasdaq_value" name="nasdaq_value" 
                                step="0.01" min="0" placeholder="21000.00" 
                                value="{{ latest_snapshot.nasdaq_value if latest_snapshot else '' }}" required>
+                        <small class="text-muted">Current total value of NAS holdings</small>
                     </div>
                     
                     <div class="mb-3">
@@ -84,6 +104,7 @@
                         <input type="number" class="form-control" id="btcc_value" name="btcc_value" 
                                step="0.01" min="0" placeholder="2600.00" 
                                value="{{ latest_snapshot.btcc_value if latest_snapshot else '' }}" required>
+                        <small class="text-muted">Current total value of BTCC holdings</small>
                     </div>
                     
                     <div class="mb-3">
@@ -91,6 +112,7 @@
                         <input type="number" class="form-control" id="zsp_value" name="zsp_value" 
                                step="0.01" min="0" placeholder="23000.00" 
                                value="{{ latest_snapshot.zsp_value if latest_snapshot else '' }}" required>
+                        <small class="text-muted">Current total value of ZSP holdings</small>
                     </div>
                     
                     <div class="alert alert-info">
@@ -98,7 +120,7 @@
                     </div>
                     
                     <button type="submit" class="btn btn-success w-100">
-                        <i class="fas fa-sync"></i> Update Portfolio Values
+                        <i class="fas fa-sync"></i> Manual Update Portfolio Values
                     </button>
                 </form>
             </div>
@@ -107,34 +129,78 @@
 
     <div class="col-md-6">
         <div class="card">
+            <div class="card-header bg-warning text-white">
+                <h5><i class="fas fa-robot"></i> Alpha Vantage Auto-Update</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-info-circle"></i> Automatic Updates</h6>
+                    <p class="mb-2">Portfolio auto-updates daily at 6 PM using Alpha Vantage API</p>
+                    <p class="mb-2"><strong>ETF Mappings:</strong></p>
+                    <ul class="mb-2" style="font-size: 0.9em;">
+                        <li>NAS → BMO95120.TO (1,123.175 shares)</li>
+                        <li>BTCC → BTCC-B.TO (122 shares)</li>
+                        <li>ZSP → ZSP.TO (234 shares)</li>
+                    </ul>
+                    <small class="text-muted">API Key: Y4KO8J7...WULE (5 requests/minute limit)</small>
+                </div>
+                
+                <div class="mb-3">
+                    <button class="btn btn-primary w-100" onclick="triggerAutoUpdate()">
+                        <i class="fas fa-sync"></i> <span id="triggerBtnText">Trigger Auto-Update Now</span>
+                    </button>
+                </div>
+                
+                <div class="mb-3">
+                    <h6>Setup Daily Auto-Updates:</h6>
+                    <code style="font-size: 0.8em; display: block; background: #f8f9fa; padding: 10px; border-radius: 5px;">
+                        # Add to crontab (crontab -e)<br>
+                        0 18 * * 1-5 cd /path/to/app && python3 auto_portfolio_update.py
+                    </code>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ETF Holdings Management -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
             <div class="card-header bg-primary text-white">
-                <h5><i class="fas fa-cog"></i> Update ETF Holdings</h5>
+                <h5><i class="fas fa-cog"></i> ETF Holdings Configuration</h5>
             </div>
             <div class="card-body">
                 {% if latest_snapshot %}
                 <form method="POST" action="{{ url_for('update_etf_holdings') }}">
-                    <div class="mb-3">
-                        <label for="nas_value" class="form-label">NAS Purchase Value ($)</label>
-                        <input type="number" class="form-control" id="nas_value" name="nas_value" 
-                               step="0.01" min="0" placeholder="19164.42" required>
-                        <small class="text-muted">Total amount invested in NAS ETF</small>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="nas_value" class="form-label">NAS Purchase Value ($)</label>
+                                <input type="number" class="form-control" id="nas_value" name="nas_value" 
+                                       step="0.01" min="0" placeholder="19164.42" required>
+                                <small class="text-muted">Total amount invested in NAS ETF</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="etf_btcc_value" class="form-label">BTCC Purchase Value ($)</label>
+                                <input type="number" class="form-control" id="etf_btcc_value" name="btcc_value" 
+                                       step="0.01" min="0" placeholder="2630.15" required>
+                                <small class="text-muted">Total amount invested in BTCC ETF</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="etf_zsp_value" class="form-label">ZSP Purchase Value ($)</label>
+                                <input type="number" class="form-control" id="etf_zsp_value" name="zsp_value" 
+                                       step="0.01" min="0" placeholder="20006.17" required>
+                                <small class="text-muted">Total amount invested in ZSP ETF</small>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="btcc_value" class="form-label">BTCC Purchase Value ($)</label>
-                        <input type="number" class="form-control" id="btcc_value" name="btcc_value" 
-                               step="0.01" min="0" placeholder="2630.15" required>
-                        <small class="text-muted">Total amount invested in BTCC ETF</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="zsp_value" class="form-label">ZSP Purchase Value ($)</label>
-                        <input type="number" class="form-control" id="zsp_value" name="zsp_value" 
-                               step="0.01" min="0" placeholder="20006.17" required>
-                        <small class="text-muted">Total amount invested in ZSP ETF</small>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary w-100">
+                    <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save"></i> Update ETF Holdings
                     </button>
                 </form>
@@ -246,6 +312,121 @@
 
 {% block scripts %}
 <script>
+// Check auto-update status on page load
+document.addEventListener('DOMContentLoaded', function() {
+    checkUpdateStatus();
+    
+    // Auto-calculate total portfolio value
+    ['nasdaq_value', 'btcc_value', 'zsp_value'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('input', updateTotalValue);
+            element.addEventListener('keyup', updateTotalValue);
+        }
+    });
+    
+    updateTotalValue();
+});
+
+function checkUpdateStatus() {
+    fetch('/portfolio/last_update_status')
+        .then(response => response.json())
+        .then(data => {
+            const statusText = document.getElementById('updateStatusText');
+            const statusBanner = document.getElementById('autoUpdateStatus');
+            
+            if (data.needs_update) {
+                statusText.textContent = `Last update: ${data.last_update_date || 'Never'} - Update needed`;
+                statusBanner.className = 'alert alert-warning';
+            } else {
+                statusText.textContent = `Up to date (${data.last_update_date})`;
+                statusBanner.className = 'alert alert-success';
+            }
+        })
+        .catch(error => {
+            console.error('Error checking update status:', error);
+            document.getElementById('updateStatusText').textContent = 'Status check failed';
+        });
+}
+
+function triggerAutoUpdate() {
+    const btn = document.getElementById('autoUpdateBtn');
+    const btnText = document.getElementById('triggerBtnText');
+    
+    // Disable button and show loading
+    btn.disabled = true;
+    btnText.textContent = 'Updating...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + btnText.textContent;
+    
+    fetch('/portfolio/auto_update_trigger', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Auto-update started! This may take a minute to complete.', 'success');
+            // Check status again after a delay
+            setTimeout(() => {
+                checkUpdateStatus();
+                // Refresh page after update completes
+                setTimeout(() => location.reload(), 3000);
+            }, 5000);
+        } else {
+            showToast(`Auto-update failed: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error triggering auto-update:', error);
+        showToast('Failed to trigger auto-update. Check console for details.', 'error');
+    })
+    .finally(() => {
+        // Re-enable button
+        btn.disabled = false;
+        btnText.textContent = 'Trigger Auto-Update Now';
+        btn.innerHTML = '<i class="fas fa-sync"></i> ' + btnText.textContent;
+    });
+}
+
+function updateTotalValue() {
+    const nasdaq = parseFloat(document.getElementById('nasdaq_value').value) || 0;
+    const btcc = parseFloat(document.getElementById('btcc_value').value) || 0;
+    const zsp = parseFloat(document.getElementById('zsp_value').value) || 0;
+    const total = nasdaq + btcc + zsp;
+    
+    document.getElementById('total_value').textContent = total.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    toast.style.cssText = `
+        top: 20px; 
+        right: 20px; 
+        z-index: 9999; 
+        min-width: 300px;
+        backdrop-filter: blur(10px);
+        background: rgba(255, 255, 255, 0.95) !important;
+    `;
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, 5000);
+}
+
 {% if performance_history %}
 // Portfolio Performance Chart
 const performanceData = {{ performance_history | tojsonfilter | safe }};
@@ -327,32 +508,5 @@ if (performanceData.length > 0) {
     });
 }
 {% endif %}
-
-// Auto-calculate total portfolio value
-function updateTotalValue() {
-    const nasdaq = parseFloat(document.getElementById('nasdaq_value').value) || 0;
-    const btcc = parseFloat(document.getElementById('btcc_value').value) || 0;
-    const zsp = parseFloat(document.getElementById('zsp_value').value) || 0;
-    const total = nasdaq + btcc + zsp;
-    
-    document.getElementById('total_value').textContent = total.toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
-}
-
-// Add event listeners to update total on input change
-document.addEventListener('DOMContentLoaded', function() {
-    ['nasdaq_value', 'btcc_value', 'zsp_value'].forEach(id => {
-        const element = document.getElementById(id);
-        if (element) {
-            element.addEventListener('input', updateTotalValue);
-            element.addEventListener('keyup', updateTotalValue);
-        }
-    });
-    
-    // Calculate initial total
-    updateTotalValue();
-});
 </script>
 {% endblock %}

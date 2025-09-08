@@ -218,6 +218,9 @@
 
 {% block scripts %}
 <script>
+// Global variable to store the weekly activity chart reference
+let weeklyActivityChartInstance = null;
+
 // Weekly Trends Chart
 const weeklyData = {{ weekly_trends | tojsonfilter | safe }};
 const weeklyCtx = document.getElementById('weeklyTrendsChart').getContext('2d');
@@ -250,6 +253,119 @@ new Chart(weeklyCtx, {
         }
     }
 });
+
+// Function to create weekly activity chart with proper coitus visibility
+function createWeeklyActivityChart(data) {
+    const weeklyCtx = document.getElementById('weeklyActivityChart').getContext('2d');
+    
+    // Check coitus visibility setting
+    const coitusVisible = localStorage.getItem('coitusVisible') !== 'false';
+    
+    // Define all possible datasets
+    const allDatasets = [
+        {
+            label: 'Gym',
+            data: data.weekly_patterns.map(w => w.gym),
+            borderColor: '#FF6384',
+            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+            fill: false,
+            tension: 0.1
+        },
+        {
+            label: 'Jiu Jitsu',
+            data: data.weekly_patterns.map(w => w.jiu_jitsu),
+            borderColor: '#36A2EB',
+            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+            fill: false,
+            tension: 0.1
+        },
+        {
+            label: 'Work',
+            data: data.weekly_patterns.map(w => w.work),
+            borderColor: '#FFCE56',
+            backgroundColor: 'rgba(255, 206, 86, 0.1)',
+            fill: false,
+            tension: 0.1
+        },
+        {
+            label: 'Skateboarding',
+            data: data.weekly_patterns.map(w => w.skateboarding),
+            borderColor: '#9966FF',
+            backgroundColor: 'rgba(153, 102, 255, 0.1)',
+            fill: false,
+            tension: 0.1
+        },
+        {
+            label: 'Supplements',
+            data: data.weekly_patterns.map(w => w.supplements),
+            borderColor: '#4BC0C0',
+            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+            fill: false,
+            tension: 0.1
+        }
+    ];
+    
+    // Conditionally add coitus dataset
+    if (coitusVisible) {
+        allDatasets.push({
+            label: 'Coitus',
+            data: data.weekly_patterns.map(w => w.coitus),
+            borderColor: '#FF9F40',
+            backgroundColor: 'rgba(255, 159, 64, 0.1)',
+            fill: false,
+            tension: 0.1
+        });
+    }
+    
+    // Destroy existing chart if it exists
+    if (weeklyActivityChartInstance) {
+        weeklyActivityChartInstance.destroy();
+    }
+    
+    // Create new chart
+    weeklyActivityChartInstance = new Chart(weeklyCtx, {
+        type: 'line',
+        data: {
+            labels: data.weekly_patterns.map(w => w.week),
+            datasets: allDatasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 7,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            }
+        }
+    });
+}
+
+// Function to update weekly activity chart when coitus visibility changes
+function updateWeeklyActivityChart() {
+    // Re-fetch data and recreate chart
+    fetch('/api/analytics/activities')
+        .then(response => response.json())
+        .then(data => {
+            createWeeklyActivityChart(data);
+        })
+        .catch(error => {
+            console.error('Error updating weekly activity chart:', error);
+        });
+}
 
 // Fetch and display advanced analytics
 fetch('/api/analytics/detailed')
@@ -360,114 +476,121 @@ fetch('/api/analytics/detailed')
         loadActivityAnalytics();
     });
     
-    async function loadActivityAnalytics() {
-        try {
-            const response = await fetch('/api/analytics/activities');
-            const data = await response.json();
-            
-            // Activity Frequency Pie Chart
-            const freqCtx = document.getElementById('activityFrequencyChart').getContext('2d');
-            new Chart(freqCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Gym', 'Jiu Jitsu', 'Work', 'Supplements', 'Skateboarding', 'Sauna'],
-                    datasets: [{
-                        data: [
-                            data.activity_stats.gym_days,
-                            data.activity_stats.jj_days,
-                            data.activity_stats.work_days,
-                            data.activity_stats.supp_days,
-                            data.activity_stats.skate_days,
-                            data.activity_stats.sauna_days
-                        ],
-                        backgroundColor: [
-                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }
-            });
-            
-            // Weekly Activity Pattern Chart
-            const weeklyCtx = document.getElementById('weeklyActivityChart').getContext('2d');
-            new Chart(weeklyCtx, {
-                type: 'line',
-                data: {
-                    labels: data.weekly_patterns.map(w => `Week ${w.week}`),
-                    datasets: [{
-                        label: 'Gym',
-                        data: data.weekly_patterns.map(w => w.gym),
-                        borderColor: '#FF6384',
-                        fill: false
-                    }, {
-                        label: 'Jiu Jitsu',
-                        data: data.weekly_patterns.map(w => w.jiu_jitsu),
-                        borderColor: '#36A2EB',
-                        fill: false
-                    }, {
-                        label: 'Work',
-                        data: data.weekly_patterns.map(w => w.work),
-                        borderColor: '#FFCE56',
-                        fill: false
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 7
-                        }
-                    }
-                }
-            });
-            
-            // Activity Insights
-            const insightsDiv = document.getElementById('activityInsights');
-            insightsDiv.innerHTML = `
-                <div class="row">
-                    <div class="col-md-3 text-center">
-                        <h5 class="text-primary">${data.streaks.gym_current}</h5>
-                        <small>Current Gym Streak</small>
-                    </div>
-                    <div class="col-md-3 text-center">
-                        <h5 class="text-info">${data.streaks.jj_current}</h5>
-                        <small>Current JJ Streak</small>
-                    </div>
-                    <div class="col-md-3 text-center">
-                        <h5 class="text-success">${data.activity_stats.gym_percentage.toFixed(1)}%</h5>
-                        <small>Gym Consistency</small>
-                    </div>
-                    <div class="col-md-3 text-center">
-                        <h5 class="text-warning">${data.activity_stats.jj_percentage.toFixed(1)}%</h5>
-                        <small>JJ Consistency</small>
-                    </div>
-                </div>
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <h6>💪 Activity Insights:</h6>
-                        <ul class="list-unstyled">
-                            ${data.insights.map(insight => `<li><i class="fas fa-lightbulb text-warning"></i> ${insight}</li>`).join('')}
-                        </ul>
-                    </div>
-                </div>
-            `;
-        } catch (error) {
-            document.getElementById('activityInsights').innerHTML = `
-                <div class="text-center text-muted">
-                    <i class="fas fa-exclamation-triangle"></i> Could not load activity analytics
-                </div>
-            `;
+async function loadActivityAnalytics() {
+    try {
+        const response = await fetch('/api/analytics/activities');
+        const data = await response.json();
+        
+        // Check coitus visibility for frequency chart
+        const coitusVisible = localStorage.getItem('coitusVisible') !== 'false';
+        
+        // Activity Frequency Pie Chart
+        const freqCtx = document.getElementById('activityFrequencyChart').getContext('2d');
+        
+        let frequencyLabels, frequencyData, frequencyColors;
+        
+        if (coitusVisible) {
+            frequencyLabels = ['Gym', 'Jiu Jitsu', 'Work', 'Supplements', 'Skateboarding', 'Sauna', 'Coitus'];
+            frequencyData = [
+                data.activity_stats.gym_days,
+                data.activity_stats.jj_days,
+                data.activity_stats.work_days,
+                data.activity_stats.supp_days,
+                data.activity_stats.skate_days,
+                data.activity_stats.sauna_days,
+                data.activity_stats.coitus_days
+            ];
+            frequencyColors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF'];
+        } else {
+            frequencyLabels = ['Gym', 'Jiu Jitsu', 'Work', 'Supplements', 'Skateboarding', 'Sauna'];
+            frequencyData = [
+                data.activity_stats.gym_days,
+                data.activity_stats.jj_days,
+                data.activity_stats.work_days,
+                data.activity_stats.supp_days,
+                data.activity_stats.skate_days,
+                data.activity_stats.sauna_days
+            ];
+            frequencyColors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
         }
+        
+        new Chart(freqCtx, {
+            type: 'doughnut',
+            data: {
+                labels: frequencyLabels,
+                datasets: [{
+                    data: frequencyData,
+                    backgroundColor: frequencyColors
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+        
+        // Create Weekly Activity Pattern Chart
+        createWeeklyActivityChart(data);
+        
+        // Activity Insights
+        const insightsDiv = document.getElementById('activityInsights');
+        insightsDiv.innerHTML = `
+            <div class="row">
+                <div class="col-md-3 text-center">
+                    <h5 class="text-primary">${data.streaks.gym_current}</h5>
+                    <small>Current Gym Streak</small>
+                </div>
+                <div class="col-md-3 text-center">
+                    <h5 class="text-info">${data.streaks.jj_current}</h5>
+                    <small>Current JJ Streak</small>
+                </div>
+                <div class="col-md-3 text-center">
+                    <h5 class="text-success">${data.activity_stats.gym_percentage.toFixed(1)}%</h5>
+                    <small>Gym Consistency</small>
+                </div>
+                <div class="col-md-3 text-center">
+                    <h5 class="text-warning">${data.activity_stats.jj_percentage.toFixed(1)}%</h5>
+                    <small>JJ Consistency</small>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6>Activity Insights:</h6>
+                    <ul class="list-unstyled">
+                        ${data.insights.map(insight => `<li><i class="fas fa-lightbulb text-warning"></i> ${insight}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        document.getElementById('activityInsights').innerHTML = `
+            <div class="text-center text-muted">
+                <i class="fas fa-exclamation-triangle"></i> Could not load activity analytics
+            </div>
+        `;
     }
+}
+
+// Hook into the global coitus visibility toggle function
+document.addEventListener('DOMContentLoaded', function() {
+    // Override the global toggle function to also update charts
+    const originalToggleCoitusVisibility = window.toggleCoitusVisibility;
+    if (originalToggleCoitusVisibility) {
+        window.toggleCoitusVisibility = function() {
+            originalToggleCoitusVisibility();
+            // Small delay to ensure DOM updates are complete
+            setTimeout(() => {
+                updateWeeklyActivityChart();
+                // Also reload the frequency chart
+                loadActivityAnalytics();
+            }, 100);
+        };
+    }
+});
 </script>
 {% endblock %}

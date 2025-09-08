@@ -1,0 +1,507 @@
+{% extends "base.html" %}
+
+{% block title %}Savings - Perfin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-piggy-bank"></i> Biweekly Savings Calculator</h1>
+        <p class="text-muted">Calculate your savings allocation based on income, expenses, and spending tracking</p>
+    </div>
+</div>
+
+<!-- Current Period Overview -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <h5><i class="fas fa-calendar"></i> Current Pay Period</h5>
+            <p class="mb-1"><strong>Period:</strong> {{ period_start }} to {{ period_end }}</p>
+            <p class="mb-1"><strong>Half:</strong> {{ "1st" if current_half == 1 else "2nd" }} half of month</p>
+            <p class="mb-0"><strong>Current Spending:</strong> ${{ "%.2f"|format(current_spending) }} (tracked from your transactions)</p>
+        </div>
+    </div>
+</div>
+
+<!-- Savings Calculator -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fas fa-calculator"></i> Savings Allocation Calculator</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('calculate_savings') }}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="biweekly_income" class="form-label">Biweekly Income ($)</label>
+                                <input type="number" class="form-control" id="biweekly_income" name="biweekly_income" 
+                                       step="0.01" min="0" value="{{ config.biweekly_income if config else 2000 }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="pay_period_half" class="form-label">Pay Period Half</label>
+                                <select class="form-control" id="pay_period_half" name="pay_period_half" required>
+                                    <option value="1" {{ "selected" if current_half == 1 else "" }}>1st Half (1st-15th)</option>
+                                    <option value="2" {{ "selected" if current_half == 2 else "" }}>2nd Half (16th-31st)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6><i class="fas fa-sliders-h"></i> Allocation Percentages</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="savings_percentage" class="form-label">
+                                    Savings: <span id="savings_display">{{ config.savings_percentage if config else 40 }}%</span>
+                                </label>
+                                <input type="range" class="form-range" id="savings_percentage" name="savings_percentage" 
+                                       min="0" max="100" step="1" value="{{ config.savings_percentage if config else 40 }}"
+                                       oninput="updateAllocation()">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="investorline_percentage" class="form-label">
+                                    Investorline: <span id="investorline_display">{{ config.investorline_percentage if config else 35 }}%</span>
+                                </label>
+                                <input type="range" class="form-range" id="investorline_percentage" name="investorline_percentage" 
+                                       min="0" max="100" step="1" value="{{ config.investorline_percentage if config else 35 }}"
+                                       oninput="updateAllocation()">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="usd_percentage" class="form-label">
+                                    USD Account: <span id="usd_display">{{ config.usd_percentage if config else 25 }}%</span>
+                                </label>
+                                <input type="range" class="form-range" id="usd_percentage" name="usd_percentage" 
+                                       min="0" max="100" step="1" value="{{ config.usd_percentage if config else 25 }}"
+                                       oninput="updateAllocation()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-secondary" id="percentage_total">
+                        <strong>Total: <span id="total_percentage">100</span>%</strong>
+                        <span id="percentage_warning" class="text-danger ms-2" style="display: none;">
+                            Must equal 100%
+                        </span>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="calculate_btn">
+                        <i class="fas fa-calculator"></i> Calculate Savings Allocation
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-warning text-white d-flex justify-content-between align-items-center">
+                <div>
+                    <h5><i class="fas fa-list"></i> Fixed Expenses</h5>
+                    <small>{{ "1st" if current_half == 1 else "2nd" }} Half of Month</small>
+                </div>
+                <button type="button" class="btn btn-sm btn-light" id="expenseModalTrigger">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                {% for expense_name, expense_data in fixed_expenses.items() %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>{{ expense_name }}</span>
+                    <span class="badge bg-danger">${{ "%.2f"|format(expense_data.amount) }}</span>
+                </div>
+                {% endfor %}
+                <hr>
+                <div class="d-flex justify-content-between align-items-center">
+                    <strong>Total Fixed:</strong>
+                    <strong class="text-danger">${{ "%.2f"|format(total_fixed_expenses) }}</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <strong>Current Spending:</strong>
+                    <strong class="text-warning">${{ "%.2f"|format(current_spending) }}</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <strong>Total Expenses:</strong>
+                    <strong class="text-danger">${{ "%.2f"|format(total_fixed_expenses + current_spending) }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Calculations -->
+{% if recent_calculations %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-history"></i> Recent Calculations</h5>
+                <form method="POST" action="{{ url_for('clear_savings_calculations') }}" style="margin: 0;">
+                    <button type="submit" class="btn btn-sm btn-outline-light" 
+                            onclick="return confirm('Clear all recent calculations? This cannot be undone.')"
+                            title="Clear all calculations">
+                        <i class="fas fa-trash"></i> Clear All
+                    </button>
+                </form>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Income</th>
+                                <th>Expenses</th>
+                                <th>Available</th>
+                                <th>Savings</th>
+                                <th>Investorline</th>
+                                <th>USD</th>
+                                <th>Period</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for calc in recent_calculations %}
+                            <tr>
+                                <td>{{ calc.created_at.strftime('%Y-%m-%d') if calc.created_at else 'N/A' }}</td>
+                                <td>${{ "%.2f"|format(calc.biweekly_income) }}</td>
+                                <td>${{ "%.2f"|format(calc.total_expenses) }}</td>
+                                <td class="{% if calc.available_for_allocation > 0 %}text-success{% else %}text-danger{% endif %}">
+                                    ${{ "%.2f"|format(calc.available_for_allocation) }}
+                                </td>
+                                <td class="text-primary">${{ "%.2f"|format(calc.savings_amount) }}</td>
+                                <td class="text-info">${{ "%.2f"|format(calc.investorline_amount) }}</td>
+                                <td class="text-warning">${{ "%.2f"|format(calc.usd_amount) }}</td>
+                                <td>{{ "1st" if calc.pay_period_half == 1 else "2nd" }} Half</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Latest Calculation Results -->
+{% if recent_calculations %}
+<div class="row">
+    {% set latest = recent_calculations[0] %}
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success">Available</h5>
+                <h2 class="{% if latest.available_for_allocation > 0 %}text-success{% else %}text-danger{% endif %}">
+                    ${{ "%.2f"|format(latest.available_for_allocation) }}
+                </h2>
+                <small class="text-muted">for allocation</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-primary">Savings</h5>
+                <h2 class="text-primary">${{ "%.2f"|format(latest.savings_amount) }}</h2>
+                <small class="text-muted">to savings account</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-info">Investorline</h5>
+                <h2 class="text-info">${{ "%.2f"|format(latest.investorline_amount) }}</h2>
+                <small class="text-muted">to investment account</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-warning">USD Account</h5>
+                <h2 class="text-warning">${{ "%.2f"|format(latest.usd_amount) }}</h2>
+                <small class="text-muted">to USD account</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Expense Management Modal -->
+<div id="expenseModal" class="modal" style="display: none; position: fixed; z-index: 1055; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg" style="margin: 1.75rem auto; max-width: 800px;">
+        <div class="modal-content" style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px); border-radius: 12px;">
+            <div class="modal-header" style="border-bottom: 1px solid #dee2e6; padding: 1rem 1.5rem;">
+                <h5 class="modal-title">
+                    <i class="fas fa-cog"></i> Manage Fixed Expenses
+                </h5>
+                <button type="button" class="btn-close" id="expenseModalClose" style="background: none; border: none; font-size: 1.5rem;" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem;">
+                <!-- Add New Expense -->
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h6><i class="fas fa-plus"></i> Add New Expense</h6>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('add_fixed_expense') }}">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="expense_name" class="form-label">Expense Name</label>
+                                        <input type="text" class="form-control" id="expense_name" name="expense_name" 
+                                               placeholder="e.g., Internet Bill" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="amount" class="form-label">Amount ($)</label>
+                                        <input type="number" class="form-control" id="amount" name="amount" 
+                                               step="0.01" min="0.01" placeholder="50.00" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="mb-3">
+                                        <label for="add_pay_period_half" class="form-label">Pay Period</label>
+                                        <select class="form-control" id="add_pay_period_half" name="pay_period_half" required>
+                                            <option value="1">1st Half (1st-15th)</option>
+                                            <option value="2">2nd Half (16th-31st)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="mb-3">
+                                        <label class="form-label">&nbsp;</label>
+                                        <button type="submit" class="btn btn-success w-100">
+                                            <i class="fas fa-plus"></i> Add
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Manage Existing Expenses -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h6>1st Half Expenses (1st-15th)</h6>
+                            </div>
+                            <div class="card-body">
+                                {% if all_first_half %}
+                                    {% for expense_name, expense_data in all_first_half.items() %}
+                                    <div class="d-flex justify-content-between align-items-center mb-3 p-2 border rounded">
+                                        <div>
+                                            <strong>{{ expense_name }}</strong>
+                                            {% if not expense_data.is_custom %}
+                                            <small class="text-muted">(Default)</small>
+                                            {% endif %}
+                                        </div>
+                                        <div class="d-flex align-items-center">
+                                            {% if expense_data.is_custom and expense_data.get('id') %}
+                                            <form method="POST" action="{{ url_for('update_fixed_expense', expense_id=expense_data.id) }}" class="d-flex me-2">
+                                                <input type="number" class="form-control form-control-sm" name="amount" 
+                                                       value="{{ expense_data.amount }}" step="0.01" min="0.01" style="width: 80px;">
+                                                <button type="submit" class="btn btn-sm btn-primary ms-1">
+                                                    <i class="fas fa-save"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ url_for('delete_fixed_expense', expense_id=expense_data.id) }}" 
+                                                  onsubmit="return confirm('Delete this expense?')">
+                                                <button type="submit" class="btn btn-sm btn-danger">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                            {% else %}
+                                            <span class="badge bg-secondary">${{ "%.2f"|format(expense_data.amount) }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted">No expenses for 1st half</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-info text-white">
+                                <h6>2nd Half Expenses (16th-31st)</h6>
+                            </div>
+                            <div class="card-body">
+                                {% if all_second_half %}
+                                    {% for expense_name, expense_data in all_second_half.items() %}
+                                    <div class="d-flex justify-content-between align-items-center mb-3 p-2 border rounded">
+                                        <div>
+                                            <strong>{{ expense_name }}</strong>
+                                            {% if not expense_data.is_custom %}
+                                            <small class="text-muted">(Default)</small>
+                                            {% endif %}
+                                        </div>
+                                        <div class="d-flex align-items-center">
+                                            {% if expense_data.is_custom and expense_data.get('id') %}
+                                            <form method="POST" action="{{ url_for('update_fixed_expense', expense_id=expense_data.id) }}" class="d-flex me-2">
+                                                <input type="number" class="form-control form-control-sm" name="amount" 
+                                                       value="{{ expense_data.amount }}" step="0.01" min="0.01" style="width: 80px;">
+                                                <button type="submit" class="btn btn-sm btn-primary ms-1">
+                                                    <i class="fas fa-save"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ url_for('delete_fixed_expense', expense_id=expense_data.id) }}" 
+                                                  onsubmit="return confirm('Delete this expense?')">
+                                                <button type="submit" class="btn btn-sm btn-danger">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                            {% else %}
+                                            <span class="badge bg-secondary">${{ "%.2f"|format(expense_data.amount) }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted">No expenses for 2nd half</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid #dee2e6; padding: 1rem 1.5rem;">
+                <button type="button" class="btn btn-secondary" id="expenseModalCloseBtn">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Simple modal functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('expenseModal');
+    const trigger = document.getElementById('expenseModalTrigger');
+    const closeBtn = document.getElementById('expenseModalClose');
+    const closeBtn2 = document.getElementById('expenseModalCloseBtn');
+    
+    function showModal() {
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function hideModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    
+    if (trigger) {
+        trigger.addEventListener('click', showModal);
+    }
+    
+    if (closeBtn) {
+        closeBtn.addEventListener('click', hideModal);
+    }
+    
+    if (closeBtn2) {
+        closeBtn2.addEventListener('click', hideModal);
+    }
+    
+    // Close when clicking outside
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            hideModal();
+        }
+    });
+    
+    // Close with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.style.display === 'block') {
+            hideModal();
+        }
+    });
+});
+
+function updateAllocation() {
+    const savings = parseInt(document.getElementById('savings_percentage').value);
+    const investorline = parseInt(document.getElementById('investorline_percentage').value);
+    const usd = parseInt(document.getElementById('usd_percentage').value);
+    
+    // Update display values
+    document.getElementById('savings_display').textContent = savings + '%';
+    document.getElementById('investorline_display').textContent = investorline + '%';
+    document.getElementById('usd_display').textContent = usd + '%';
+    
+    // Calculate total
+    const total = savings + investorline + usd;
+    document.getElementById('total_percentage').textContent = total;
+    
+    // Show warning if not 100%
+    const warning = document.getElementById('percentage_warning');
+    const calculateBtn = document.getElementById('calculate_btn');
+    
+    if (total !== 100) {
+        warning.style.display = 'inline';
+        calculateBtn.disabled = true;
+        calculateBtn.classList.add('btn-secondary');
+        calculateBtn.classList.remove('btn-primary');
+    } else {
+        warning.style.display = 'none';
+        calculateBtn.disabled = false;
+        calculateBtn.classList.add('btn-primary');
+        calculateBtn.classList.remove('btn-secondary');
+    }
+    
+    updatePreviewCalculations();
+}
+
+function updatePreviewCalculations() {
+    const income = parseFloat(document.getElementById('biweekly_income').value) || 0;
+    const currentSpending = {{ current_spending }};
+    const fixedExpenses = {{ total_fixed_expenses }};
+    const totalExpenses = currentSpending + fixedExpenses;
+    const available = Math.max(0, income - totalExpenses);
+    
+    const savings = parseInt(document.getElementById('savings_percentage').value);
+    const investorline = parseInt(document.getElementById('investorline_percentage').value);
+    const usd = parseInt(document.getElementById('usd_percentage').value);
+    
+    // Only show preview if percentages are valid
+    if (savings + investorline + usd === 100) {
+        // Could add live preview cards here if desired
+    }
+}
+
+// Auto-update when pay period changes
+document.getElementById('pay_period_half').addEventListener('change', function() {
+    const half = this.value;
+    const message = half === '1' ? 
+        'Fixed expenses will show: Fit4less, Jiu Jitsu, Phone Bill, Car Insurance' :
+        'Fixed expenses will show: Fit4less, Ravi Syal, Condo Insurance';
+    
+    console.log(message);
+});
+
+// Initialize everything when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    updateAllocation();
+    
+    // Add event listeners for income changes
+    const incomeInput = document.getElementById('biweekly_income');
+    if (incomeInput) {
+        incomeInput.addEventListener('input', updatePreviewCalculations);
+    }
+});
+</script>
+{% endblock %}
