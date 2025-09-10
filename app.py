@@ -86,7 +86,8 @@ def dashboard():
     end_date = budget_period['end_date']
     if isinstance(end_date, str):
         end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-    days_left = (end_date - today).days + 1
+    # Don't count the end day as that is the day the user gets paid
+    days_left = (end_date - today).days
     
     cursor = conn.cursor()
     cursor.execute('''
@@ -1574,6 +1575,212 @@ def clear_savings_calculations():
     except Exception as e:
         flash(f'Error clearing calculations: {str(e)}', 'error')
         return redirect(url_for('savings'))
+
+# CONDO MANAGEMENT ROUTES
+@app.route('/condo')
+def condo():
+    """Condo property management page"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get current condo configuration
+    cursor.execute('SELECT * FROM condo_config ORDER BY id DESC LIMIT 1')
+    config = cursor.fetchone()
+    
+    if not config:
+        # Create default configuration
+        cursor.execute('''
+            INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount)
+            VALUES (1375.99, 427.35, 406.00, 2000.00)
+        ''')
+        conn.commit()
+        cursor.execute('SELECT * FROM condo_config ORDER BY id DESC LIMIT 1')
+        config = cursor.fetchone()
+    
+    # Calculate total expenses
+    total_expenses = float(config['mortgage']) + float(config['condo_fee']) + float(config['property_tax'])
+    revenue = float(config['rent_amount']) - total_expenses
+    yearly_revenue = revenue * 12
+    
+    # Get monthly tracking data for current year
+    current_year = get_toronto_date().year
+    cursor.execute('''
+        SELECT * FROM condo_monthly_tracking 
+        WHERE year = ? 
+        ORDER BY month
+    ''', (current_year,))
+    monthly_data = cursor.fetchall()
+    
+    # Get property tax schedule
+    cursor.execute('''
+        SELECT * FROM property_tax_schedule 
+        WHERE year = ? 
+        ORDER BY installment_number
+    ''', (current_year,))
+    property_tax_data = cursor.fetchall()
+    
+    # Calculate property tax totals
+    cursor.execute('''
+        SELECT 
+            SUM(amount) as total_amount,
+            COUNT(CASE WHEN paid = 1 THEN 1 END) as paid_count,
+            COUNT(*) as total_count
+        FROM property_tax_schedule 
+        WHERE year = ?
+    ''', (current_year,))
+    tax_summary = cursor.fetchone()
+    
+    conn.close()
+    
+    return render_template('condo.html',
+                         config=config,
+                         total_expenses=total_expenses,
+                         revenue=revenue,
+                         yearly_revenue=yearly_revenue,
+                         monthly_data=monthly_data,
+                         property_tax_data=property_tax_data,
+                         tax_summary=tax_summary,
+                         current_year=current_year,
+                         today=get_toronto_date())
+
+@app.route('/condo/update_config', methods=['POST'])
+def update_condo_config():
+    """Update condo configuration"""
+    try:
+        mortgage = float(request.form.get('mortgage', 0))
+        condo_fee = float(request.form.get('condo_fee', 0))
+        property_tax = float(request.form.get('property_tax', 0))
+        rent_amount = float(request.form.get('rent_amount', 0))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount)
+            VALUES (?, ?, ?, ?)
+        ''', (mortgage, condo_fee, property_tax, rent_amount))
+        
+        conn.commit()
+        conn.close()
+        
+        flash('Condo configuration updated successfully!', 'success')
+        return redirect(url_for('condo'))
+        
+    except ValueError:
+        flash('Please enter valid numeric values', 'error')
+        return redirect(url_for('condo'))
+    except Exception as e:
+        flash(f'Error updating configuration: {str(e)}', 'error')
+        return redirect(url_for('condo'))
+
+@app.route('/condo/update_monthly/<int:year>/<int:month>', methods=['POST'])
+def update_monthly_data(year, month):
+    """Update monthly tracking data"""
+    try:
+        tenant_paid = float(request.form.get('tenant_paid', 0))
+        enwin_bill = float(request.form.get('enwin_bill', 0))
+        enbridge_bill = float(request.form.get('enbridge_bill', 0))
+        who_paid_utilities = request.form.get('who_paid_utilities', 'Me')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO condo_monthly_tracking 
+            (year, month, tenant_paid, enwin_bill, enbridge_bill, who_paid_utilities, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (year, month, tenant_paid, enwin_bill, enbridge_bill, who_paid_utilities))
+        
+        conn.commit()
+        conn.close()
+        
+        flash(f'Updated data for {year}-{month:02d}', 'success')
+        return redirect(url_for('condo'))
+        
+    except ValueError:
+        flash('Please enter valid numeric values', 'error')
+        return redirect(url_for('condo'))
+    except Exception as e:
+        flash(f'Error updating monthly data: {str(e)}', 'error')
+        return redirect(url_for('condo'))
+
+@app.route('/condo/toggle_tenant_payment/<int:year>/<int:month>', methods=['POST'])
+def toggle_tenant_payment(year, month):
+    """Toggle tenant payment status"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get current rent amount from config
+        cursor.execute('SELECT rent_amount FROM condo_config ORDER BY id DESC LIMIT 1')
+        config = cursor.fetchone()
+        rent_amount = float(config['rent_amount']) if config else 2000.00
+        
+        # Get current status
+        cursor.execute('''
+            SELECT tenant_paid FROM condo_monthly_tracking 
+            WHERE year = ? AND month = ?
+        ''', (year, month))
+        result = cursor.fetchone()
+        
+        if result and result['tenant_paid'] > 0:
+            # Mark as unpaid
+            new_amount = 0
+        else:
+            # Mark as paid
+            new_amount = rent_amount
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO condo_monthly_tracking 
+            (year, month, tenant_paid, tenant_paid_date, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (year, month, new_amount, get_toronto_date() if new_amount > 0 else None))
+        
+        conn.commit()
+        conn.close()
+        
+        status = 'paid' if new_amount > 0 else 'unpaid'
+        flash(f'Tenant payment marked as {status} for {year}-{month:02d}', 'success')
+        return redirect(url_for('condo'))
+        
+    except Exception as e:
+        flash(f'Error updating tenant payment: {str(e)}', 'error')
+        return redirect(url_for('condo'))
+
+@app.route('/condo/toggle_property_tax/<int:tax_id>', methods=['POST'])
+def toggle_property_tax_payment(tax_id):
+    """Toggle property tax payment status"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get current status
+        cursor.execute('SELECT paid FROM property_tax_schedule WHERE id = ?', (tax_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            new_status = 0 if result['paid'] else 1
+            paid_date = get_toronto_date() if new_status else None
+            
+            cursor.execute('''
+                UPDATE property_tax_schedule 
+                SET paid = ?, paid_date = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (new_status, paid_date, tax_id))
+            
+            conn.commit()
+            conn.close()
+            
+            status = 'paid' if new_status else 'unpaid'
+            flash(f'Property tax installment marked as {status}', 'success')
+        else:
+            flash('Property tax installment not found', 'error')
+        
+        return redirect(url_for('condo'))
+        
+    except Exception as e:
+        flash(f'Error updating property tax: {str(e)}', 'error')
+        return redirect(url_for('condo'))
     
 if __name__ == '__main__':
     # Add pytz to requirements

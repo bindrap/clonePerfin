@@ -1,0 +1,424 @@
+{% extends "base.html" %}
+
+{% block title %}Condo Management - Perfin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1><i class="fas fa-building"></i> Condo Property Management</h1>
+    </div>
+</div>
+
+<!-- Current Expenses Overview -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fas fa-calculator"></i> Monthly Expenses Overview</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <td><strong>Mortgage:</strong></td>
+                        <td class="text-end">${{ "%.2f"|format(config.mortgage) }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Condo Fee:</strong></td>
+                        <td class="text-end">${{ "%.2f"|format(config.condo_fee) }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Property Tax:</strong></td>
+                        <td class="text-end">${{ "%.2f"|format(config.property_tax) }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Electricity:</strong></td>
+                        <td class="text-end">Full</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Gas:</strong></td>
+                        <td class="text-end">Full</td>
+                    </tr>
+                    <tr class="border-top">
+                        <td><strong>Total:</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_expenses) }}</strong></td>
+                    </tr>
+                    <tr class="{% if revenue < 0 %}text-danger{% else %}text-success{% endif %}">
+                        <td><strong>Revenue:</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(revenue) }}</strong></td>
+                    </tr>
+                    <tr class="{% if yearly_revenue < 0 %}text-danger{% else %}text-success{% endif %}">
+                        <td><strong>Yearly:</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(yearly_revenue) }}</strong></td>
+                    </tr>
+                </table>
+                
+                <hr>
+                <form method="POST" action="{{ url_for('update_condo_config') }}" class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label">Mortgage</label>
+                        <input type="number" step="0.01" name="mortgage" class="form-control" value="{{ config.mortgage }}" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Condo Fee</label>
+                        <input type="number" step="0.01" name="condo_fee" class="form-control" value="{{ config.condo_fee }}" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Property Tax</label>
+                        <input type="number" step="0.01" name="property_tax" class="form-control" value="{{ config.property_tax }}" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Rent Amount</label>
+                        <input type="number" step="0.01" name="rent_amount" class="form-control" value="{{ config.rent_amount }}" required>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-save"></i> Update Configuration
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5><i class="fas fa-chart-line"></i> Revenue Analysis</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>If rent is ${{ "%.0f"|format(config.rent_amount) }}:</strong>
+                </div>
+                <div class="mb-2">
+                    I make: <span class="{% if revenue < 0 %}text-danger{% else %}text-success{% endif %}">${{ "%.2f"|format(revenue) }}</span>
+                </div>
+                <div class="mb-3">
+                    A year: <span class="{% if yearly_revenue < 0 %}text-danger{% else %}text-success{% endif %}">${{ "%.2f"|format(yearly_revenue) }}</span>
+                </div>
+                
+                {% if revenue < 0 %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Currently operating at a loss. Consider adjusting rent or expenses.
+                </div>
+                {% else %}
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    Property is generating positive cash flow.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Monthly Tracking Table -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5><i class="fas fa-calendar-alt"></i> Monthly Tracking ({{ current_year }})</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Tenant Paid</th>
+                                <th>Enwin</th>
+                                <th>Enbridge</th>
+                                <th>Who Paid Utilities</th>
+                                <th>Total Utilities</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set months = ['', 'January', 'February', 'March', 'April', 'May', 'June', 
+                                           'July', 'August', 'September', 'October', 'November', 'December'] %}
+                            {% for month_num in range(1, 13) %}
+                                {% set month_data = monthly_data | selectattr("month", "equalto", month_num) | first %}
+                                {% set month_name = months[month_num] %}
+                                <tr>
+                                    <td><strong>{{ month_name }}</strong></td>
+                                    <td>
+                                        {% if month_data and month_data.tenant_paid > 0 %}
+                                            <span class="badge bg-success">${{ "%.0f"|format(month_data.tenant_paid) }}</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Not Paid</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if month_data and month_data.enwin_bill > 0 %}
+                                            ${{ "%.2f"|format(month_data.enwin_bill) }}
+                                        {% else %}
+                                            $0.00
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if month_data and month_data.enbridge_bill > 0 %}
+                                            ${{ "%.2f"|format(month_data.enbridge_bill) }}
+                                        {% else %}
+                                            $0.00
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if month_data %}
+                                            <span class="badge {% if month_data.who_paid_utilities == 'Tenant' %}bg-success{% else %}bg-warning{% endif %}">
+                                                {{ month_data.who_paid_utilities }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if month_data %}
+                                            {% set total_utilities = month_data.enwin_bill + month_data.enbridge_bill %}
+                                            <strong>${{ "%.2f"|format(total_utilities) }}</strong>
+                                        {% else %}
+                                            $0.00
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <form method="POST" action="{{ url_for('toggle_tenant_payment', year=current_year, month=month_num) }}" style="display:inline;">
+                                                <button type="submit" class="btn btn-sm {% if month_data and month_data.tenant_paid > 0 %}btn-success{% else %}btn-outline-success{% endif %}">
+                                                    <i class="fas fa-money-bill-wave"></i>
+                                                </button>
+                                            </form>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="openMonthModal({{ month_num }}, '{{ month_name }}', {{ month_data.tenant_paid if month_data else 0 }}, {{ month_data.enwin_bill if month_data else 0 }}, {{ month_data.enbridge_bill if month_data else 0 }}, '{{ month_data.who_paid_utilities if month_data else 'Me' }}')">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Property Tax Tracking -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5><i class="fas fa-receipt"></i> Property Tax Tracking ({{ current_year }})</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="stat-card bg-info text-white">
+                            <div class="stat-number">${{ "%.2f"|format(tax_summary.total_amount) if tax_summary else "0.00" }}</div>
+                            <small>Total Amount</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card bg-success text-white">
+                            <div class="stat-number">{{ tax_summary.paid_count if tax_summary else 0 }}</div>
+                            <small>Paid</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card bg-warning text-dark">
+                            <div class="stat-number">{{ (tax_summary.total_count - tax_summary.paid_count) if tax_summary else 0 }}</div>
+                            <small>Remaining</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card bg-primary text-white">
+                            <div class="stat-number">${{ "%.2f"|format(tax_summary.total_amount / 12) if tax_summary and tax_summary.total_amount else "0.00" }}</div>
+                            <small>Monthly</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Installment</th>
+                                <th>Amount</th>
+                                <th>Due Date</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tax in property_tax_data %}
+                                <tr {% if tax.was_late %}class="table-warning"{% endif %}>
+                                    <td><strong>{{ tax.installment_number }}{{ ['st', 'nd', 'rd', 'th'][tax.installment_number-1] if tax.installment_number <= 4 else 'th' }}</strong></td>
+                                    <td>${{ "%.2f"|format(tax.amount) }}</td>
+                                    <td>{{ tax.due_date }}{% if tax.was_late %} <span class="badge bg-warning">was late</span>{% endif %}</td>
+                                    <td>
+                                        {% if tax.paid %}
+                                            <span class="badge bg-success">Paid</span>
+                                            {% if tax.paid_date %}
+                                                <small class="text-muted">({{ tax.paid_date }})</small>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-danger">Unpaid</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('toggle_property_tax_payment', tax_id=tax.id) }}" style="display:inline;">
+                                            <button type="submit" class="btn btn-sm {% if tax.paid %}btn-success{% else %}btn-outline-success{% endif %}">
+                                                <i class="fas fa-{% if tax.paid %}check-circle{% else %}circle{% endif %}"></i>
+                                                {{ 'Paid' if tax.paid else 'Mark Paid' }}
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Month Edit Modal - Single Reusable Modal -->
+<div id="monthModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999999;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; min-width: 450px; z-index: 1000000;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
+            <h5 style="margin: 0; color: #333;" id="monthModalTitle"><i class="fas fa-edit"></i> Edit Month Data</h5>
+            <button onclick="closeMonthModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+        </div>
+        
+        <form id="monthForm" method="POST" action="">
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Tenant Paid ($)</label>
+                <input type="number" id="tenantPaidInput" name="tenant_paid" 
+                       step="0.01" min="0" value="0" required
+                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Enwin Bill ($)</label>
+                <input type="number" id="enwinBillInput" name="enwin_bill" 
+                       step="0.01" min="0" value="0" required
+                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Enbridge Bill ($)</label>
+                <input type="number" id="enbridgeBillInput" name="enbridge_bill" 
+                       step="0.01" min="0" value="0" required
+                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Who Paid Utilities</label>
+                <select id="whoPaidUtilitiesSelect" name="who_paid_utilities"
+                        style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+                    <option value="Me">Me</option>
+                    <option value="Tenant">Tenant</option>
+                </select>
+            </div>
+            
+            <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
+                <h6 style="margin: 0 0 10px 0; color: #333;"><i class="fas fa-info-circle"></i> Utility Summary</h6>
+                <p style="margin: 5px 0; color: #333;">
+                    <strong>Total Utilities: $<span id="totalUtilitiesDisplay">0.00</span></strong>
+                </p>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" onclick="closeMonthModal()" 
+                        style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Custom modal functions - exactly like Dashboard
+function openMonthModal(monthNum, monthName, tenantPaid, enwinBill, enbridgeBill, whoPaid) {
+    // Set the form action URL
+    const form = document.getElementById('monthForm');
+    form.action = `/condo/update_monthly/{{ current_year }}/${monthNum}`;
+    
+    // Set the modal title
+    document.getElementById('monthModalTitle').innerHTML = `<i class="fas fa-edit"></i> Edit ${monthName} {{ current_year }}`;
+    
+    // Populate form fields with current values
+    document.getElementById('tenantPaidInput').value = tenantPaid || 0;
+    document.getElementById('enwinBillInput').value = enwinBill || 0;
+    document.getElementById('enbridgeBillInput').value = enbridgeBill || 0;
+    document.getElementById('whoPaidUtilitiesSelect').value = whoPaid || 'Me';
+    
+    // Update total utilities display
+    updateUtilitiesTotal();
+    
+    // Show modal
+    document.getElementById('monthModalOverlay').style.display = 'block';
+    document.body.style.overflow = 'hidden'; // Prevent scrolling
+    
+    // Focus on first input after a brief delay
+    setTimeout(() => {
+        const input = document.getElementById('tenantPaidInput');
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }, 100);
+}
+
+function closeMonthModal() {
+    document.getElementById('monthModalOverlay').style.display = 'none';
+    document.body.style.overflow = 'auto'; // Restore scrolling
+}
+
+// Close modal when clicking overlay
+document.getElementById('monthModalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeMonthModal();
+    }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeMonthModal();
+    }
+});
+
+// Update utilities total when inputs change
+function updateUtilitiesTotal() {
+    const enwinBill = parseFloat(document.getElementById('enwinBillInput').value) || 0;
+    const enbridgeBill = parseFloat(document.getElementById('enbridgeBillInput').value) || 0;
+    const total = enwinBill + enbridgeBill;
+    
+    const displayElement = document.getElementById('totalUtilitiesDisplay');
+    if (displayElement) {
+        displayElement.textContent = total.toFixed(2);
+    }
+}
+
+// Add event listeners for real-time calculation
+document.addEventListener('DOMContentLoaded', function() {
+    const enwinInput = document.getElementById('enwinBillInput');
+    const enbridgeInput = document.getElementById('enbridgeBillInput');
+    
+    if (enwinInput) {
+        enwinInput.addEventListener('input', updateUtilitiesTotal);
+    }
+    if (enbridgeInput) {
+        enbridgeInput.addEventListener('input', updateUtilitiesTotal);
+    }
+});
+</script>
+{% endblock %}
