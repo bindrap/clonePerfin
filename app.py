@@ -86,8 +86,8 @@ def dashboard():
     end_date = budget_period['end_date']
     if isinstance(end_date, str):
         end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-    # Don't count the end day as that is the day the user gets paid
-    days_left = (end_date - today).days
+    # Include today in the count for proper days remaining calculation
+    days_left = (end_date - today).days + 1
     
     cursor = conn.cursor()
     cursor.execute('''
