@@ -12,12 +12,112 @@
 
 <!-- Current Period Overview -->
 <div class="row mb-4">
-    <div class="col-12">
+    <div class="col-md-6">
         <div class="alert alert-info">
             <h5><i class="fas fa-calendar"></i> Current Pay Period</h5>
             <p class="mb-1"><strong>Period:</strong> {{ period_start }} to {{ period_end }}</p>
-            <p class="mb-1"><strong>Half:</strong> {{ "1st" if current_half == 1 else "2nd" }} half of month</p>
-            <p class="mb-0"><strong>Current Spending:</strong> ${{ "%.2f"|format(current_spending) }} (tracked from your transactions)</p>
+            <p class="mb-1"><strong>Half:</strong>
+                {{ "1st" if current_half == 1 else "2nd" }} half of month
+                <small>(auto-detected)</small>
+            </p>
+            <p class="mb-2"><strong>Current Spending:</strong> ${{ "%.2f"|format(current_spending) }}
+                {% if spending_period_choice == 'current' %}
+                    <span class="badge bg-primary">Used in calculations</span>
+                {% else %}
+                    <span class="badge bg-secondary">Not used in calculations</span>
+                {% endif %}
+            </p>
+
+            <!-- Manual Override -->
+            <form method="POST" action="{{ url_for('override_pay_period') }}" class="d-flex align-items-center">
+                <label class="form-label me-2 mb-0"><small>Manual Override:</small></label>
+                <select name="pay_period_type" class="form-select form-select-sm me-2" style="width: auto;">
+                    <option value="1" {% if current_half == 1 %}selected{% endif %}>1st half</option>
+                    <option value="2" {% if current_half == 2 %}selected{% endif %}>2nd half</option>
+                </select>
+                <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+            </form>
+        </div>
+    </div>
+
+    {% if previous_period %}
+    <div class="col-md-6">
+        <div class="alert alert-secondary">
+            <h5><i class="fas fa-history"></i> Previous Pay Period</h5>
+            <p class="mb-1"><strong>Period:</strong> {{ previous_period.start_date }} to {{ previous_period.end_date }}</p>
+            <p class="mb-1"><strong>Budget:</strong> ${{ "%.2f"|format(previous_period.budget_amount) }}</p>
+            <p class="mb-1"><strong>Total Spent:</strong>
+                <span class="{% if previous_spending > previous_period.budget_amount %}text-danger{% else %}text-success{% endif %}">
+                    ${{ "%.2f"|format(previous_spending) }}
+                </span>
+                {% if previous_spending > previous_period.budget_amount %}
+                    (Over by ${{ "%.2f"|format(previous_spending - previous_period.budget_amount) }})
+                {% else %}
+                    (Under by ${{ "%.2f"|format(previous_period.budget_amount - previous_spending) }})
+                {% endif %}
+            </p>
+            <p class="mb-0">
+                {% if spending_period_choice == 'previous' %}
+                    <span class="badge bg-primary">Used in calculations</span>
+                {% else %}
+                    <span class="badge bg-secondary">Not used in calculations</span>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-md-6">
+        <div class="alert alert-warning">
+            <h5><i class="fas fa-exclamation-triangle"></i> Previous Pay Period</h5>
+            <p class="mb-0">No previous pay period data available</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Spending Period Selection -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <h5><i class="fas fa-toggle-on"></i> Spending Period Selection for Calculations</h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <form method="GET" action="{{ url_for('savings') }}" class="d-flex align-items-center">
+                            <label class="form-label me-3 mb-0"><strong>Use spending from:</strong></label>
+                            <div class="me-3">
+                                <input type="radio" class="form-check-input me-1" name="spending_period" value="current"
+                                       id="current_spending" {% if spending_period_choice == 'current' %}checked{% endif %}
+                                       onchange="this.form.submit()">
+                                <label class="form-check-label" for="current_spending">
+                                    Current Period (${{ "%.2f"|format(current_spending) }})
+                                </label>
+                            </div>
+                            {% if previous_period %}
+                            <div class="me-3">
+                                <input type="radio" class="form-check-input me-1" name="spending_period" value="previous"
+                                       id="previous_spending" {% if spending_period_choice == 'previous' %}checked{% endif %}
+                                       onchange="this.form.submit()">
+                                <label class="form-check-label" for="previous_spending">
+                                    Previous Period (${{ "%.2f"|format(previous_spending) }})
+                                </label>
+                            </div>
+                            {% endif %}
+                        </form>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="alert alert-light mb-0 p-2">
+                            <small>
+                                <strong>Selected:</strong> {{ selected_period_info.type }}<br>
+                                <strong>Amount:</strong> ${{ "%.2f"|format(selected_spending) }}<br>
+                                <strong>Period:</strong> {{ selected_period_info.start_date }} to {{ selected_period_info.end_date }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -31,6 +131,9 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('calculate_savings') }}">
+                    <!-- Hidden field to preserve spending period choice -->
+                    <input type="hidden" name="spending_period_choice" value="{{ spending_period_choice }}">
+
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -50,36 +153,30 @@
                         </div>
                     </div>
 
-                    <h6><i class="fas fa-sliders-h"></i> Allocation Percentages</h6>
+                    <h6><i class="fas fa-percentage"></i> Allocation Percentages</h6>
                     <div class="row">
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label for="savings_percentage" class="form-label">
-                                    Savings: <span id="savings_display">{{ config.savings_percentage if config else 40 }}%</span>
-                                </label>
-                                <input type="range" class="form-range" id="savings_percentage" name="savings_percentage" 
-                                       min="0" max="100" step="1" value="{{ config.savings_percentage if config else 40 }}"
-                                       oninput="updateAllocation()">
+                                <label for="savings_percentage" class="form-label">Savings (%)</label>
+                                <input type="number" class="form-control" id="savings_percentage" name="savings_percentage"
+                                       min="0" max="100" step="0.1" value="{{ config.savings_percentage if config else 40 }}"
+                                       placeholder="40" oninput="updateAllocation()">
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label for="investorline_percentage" class="form-label">
-                                    Investorline: <span id="investorline_display">{{ config.investorline_percentage if config else 35 }}%</span>
-                                </label>
-                                <input type="range" class="form-range" id="investorline_percentage" name="investorline_percentage" 
-                                       min="0" max="100" step="1" value="{{ config.investorline_percentage if config else 35 }}"
-                                       oninput="updateAllocation()">
+                                <label for="investorline_percentage" class="form-label">Investorline (%)</label>
+                                <input type="number" class="form-control" id="investorline_percentage" name="investorline_percentage"
+                                       min="0" max="100" step="0.1" value="{{ config.investorline_percentage if config else 35 }}"
+                                       placeholder="35" oninput="updateAllocation()">
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
-                                <label for="usd_percentage" class="form-label">
-                                    USD Account: <span id="usd_display">{{ config.usd_percentage if config else 25 }}%</span>
-                                </label>
-                                <input type="range" class="form-range" id="usd_percentage" name="usd_percentage" 
-                                       min="0" max="100" step="1" value="{{ config.usd_percentage if config else 25 }}"
-                                       oninput="updateAllocation()">
+                                <label for="usd_percentage" class="form-label">USD Account (%)</label>
+                                <input type="number" class="form-control" id="usd_percentage" name="usd_percentage"
+                                       min="0" max="100" step="0.1" value="{{ config.usd_percentage if config else 25 }}"
+                                       placeholder="25" oninput="updateAllocation()">
                             </div>
                         </div>
                     </div>
@@ -123,12 +220,13 @@
                     <strong class="text-danger">${{ "%.2f"|format(total_fixed_expenses) }}</strong>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-2">
-                    <strong>Current Spending:</strong>
-                    <strong class="text-warning">${{ "%.2f"|format(current_spending) }}</strong>
+                    <strong>Selected Period Spending:</strong>
+                    <strong class="text-warning">${{ "%.2f"|format(selected_spending) }}</strong>
+                    <small class="text-muted ms-2">({{ selected_period_info.type }})</small>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-2">
                     <strong>Total Expenses:</strong>
-                    <strong class="text-danger">${{ "%.2f"|format(total_fixed_expenses + current_spending) }}</strong>
+                    <strong class="text-danger">${{ "%.2f"|format(total_fixed_expenses + selected_spending) }}</strong>
                 </div>
             </div>
         </div>
@@ -434,23 +532,18 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function updateAllocation() {
-    const savings = parseInt(document.getElementById('savings_percentage').value);
-    const investorline = parseInt(document.getElementById('investorline_percentage').value);
-    const usd = parseInt(document.getElementById('usd_percentage').value);
-    
-    // Update display values
-    document.getElementById('savings_display').textContent = savings + '%';
-    document.getElementById('investorline_display').textContent = investorline + '%';
-    document.getElementById('usd_display').textContent = usd + '%';
-    
+    const savings = parseFloat(document.getElementById('savings_percentage').value) || 0;
+    const investorline = parseFloat(document.getElementById('investorline_percentage').value) || 0;
+    const usd = parseFloat(document.getElementById('usd_percentage').value) || 0;
+
     // Calculate total
     const total = savings + investorline + usd;
-    document.getElementById('total_percentage').textContent = total;
-    
+    document.getElementById('total_percentage').textContent = total.toFixed(1);
+
     // Show warning if not 100%
     const warning = document.getElementById('percentage_warning');
     const calculateBtn = document.getElementById('calculate_btn');
-    
+
     if (total !== 100) {
         warning.style.display = 'inline';
         calculateBtn.disabled = true;
@@ -462,20 +555,20 @@ function updateAllocation() {
         calculateBtn.classList.add('btn-primary');
         calculateBtn.classList.remove('btn-secondary');
     }
-    
+
     updatePreviewCalculations();
 }
 
 function updatePreviewCalculations() {
     const income = parseFloat(document.getElementById('biweekly_income').value) || 0;
-    const currentSpending = {{ current_spending }};
+    const selectedSpending = {{ selected_spending }};
     const fixedExpenses = {{ total_fixed_expenses }};
-    const totalExpenses = currentSpending + fixedExpenses;
+    const totalExpenses = selectedSpending + fixedExpenses;
     const available = Math.max(0, income - totalExpenses);
     
-    const savings = parseInt(document.getElementById('savings_percentage').value);
-    const investorline = parseInt(document.getElementById('investorline_percentage').value);
-    const usd = parseInt(document.getElementById('usd_percentage').value);
+    const savings = parseFloat(document.getElementById('savings_percentage').value);
+    const investorline = parseFloat(document.getElementById('investorline_percentage').value);
+    const usd = parseFloat(document.getElementById('usd_percentage').value);
     
     // Only show preview if percentages are valid
     if (savings + investorline + usd === 100) {

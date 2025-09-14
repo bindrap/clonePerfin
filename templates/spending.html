@@ -98,8 +98,12 @@
                             </div>
                             <div class="d-flex align-items-center">
                                 <span class="badge bg-primary me-2">${{ "%.2f"|format(entry.price) }}</span>
-                                <form method="POST" action="{{ url_for('delete_spending', entry_id=entry.id) }}" 
-                                      style="display: inline;" 
+                                <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                                        onclick="editSpending({{ entry.id }})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <form method="POST" action="{{ url_for('delete_spending', entry_id=entry.id) }}"
+                                      style="display: inline;"
                                       onsubmit="return confirm('Are you sure you want to delete this entry?')">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="fas fa-trash"></i>
@@ -115,4 +119,109 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Spending Modal - Custom Implementation -->
+<div id="editSpendingModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999999;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; min-width: 400px; z-index: 1000000;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
+            <h5 style="margin: 0; color: #333;"><i class="fas fa-edit"></i> Edit Spending Entry</h5>
+            <button onclick="closeEditSpendingModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+        </div>
+
+        <form id="editSpendingForm" method="POST">
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Date</label>
+                <input type="date" id="edit_date" name="date" required
+                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Item</label>
+                <input type="text" id="edit_item" name="item" required
+                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Price ($)</label>
+                <input type="number" id="edit_price" name="price" step="0.01" min="0.01" required
+                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" onclick="closeEditSpendingModal()"
+                        style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    Cancel
+                </button>
+                <button type="submit"
+                        style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Custom modal functions (same approach as dashboard)
+function openEditSpendingModal() {
+    document.getElementById('editSpendingModalOverlay').style.display = 'block';
+    document.body.style.overflow = 'hidden'; // Prevent scrolling
+
+    // Focus on the item input after a brief delay
+    setTimeout(() => {
+        const input = document.getElementById('edit_item');
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }, 100);
+}
+
+function closeEditSpendingModal() {
+    document.getElementById('editSpendingModalOverlay').style.display = 'none';
+    document.body.style.overflow = 'auto'; // Restore scrolling
+}
+
+function editSpending(entryId) {
+    // Fetch entry data
+    fetch(`/spending/edit/${entryId}`)
+        .then(response => response.json())
+        .then(data => {
+            // Populate form fields
+            document.getElementById('edit_date').value = data.date;
+            document.getElementById('edit_item').value = data.item;
+            document.getElementById('edit_price').value = data.price;
+
+            // Set form action
+            document.getElementById('editSpendingForm').action = `/spending/edit/${entryId}`;
+
+            // Show custom modal
+            openEditSpendingModal();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading spending entry');
+        });
+}
+
+// Close modal when clicking overlay
+document.addEventListener('DOMContentLoaded', function() {
+    const overlay = document.getElementById('editSpendingModalOverlay');
+    if (overlay) {
+        overlay.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEditSpendingModal();
+            }
+        });
+    }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeEditSpendingModal();
+    }
+});
+</script>
+
 {% endblock %}

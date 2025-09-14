@@ -51,31 +51,89 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def determine_pay_period_type(start_date, end_date):
+    """
+    Determine if a budget period is first or second half based on the logic:
+    - If most days in budget period fall after the 15th → second period (2)
+    - If most days fall before 15th → first period (1)
+    """
+    if isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+    if isinstance(end_date, str):
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+    total_days = (end_date - start_date).days + 1
+    days_after_15th = 0
+    current = start_date
+
+    while current <= end_date:
+        if current.day > 15:
+            days_after_15th += 1
+        current += timedelta(days=1)
+
+    return 2 if days_after_15th > (total_days / 2) else 1
+
 def get_current_budget_period():
     conn = get_db_connection()
     cursor = conn.cursor()
     today = get_toronto_date()
     cursor.execute('''
-        SELECT * FROM budget_periods 
+        SELECT * FROM budget_periods
         WHERE start_date <= ? AND end_date >= ?
         ORDER BY start_date DESC LIMIT 1
     ''', (today, today))
     period = cursor.fetchone()
-    
+
     if not period:
         start_date = today
         end_date = today + timedelta(days=13)
+        pay_period_type = determine_pay_period_type(start_date, end_date)
         cursor.execute('''
-            INSERT INTO budget_periods (start_date, end_date, budget_amount, is_current)
-            VALUES (?, ?, 500.00, 1)
-        ''', (start_date, end_date))
+            INSERT INTO budget_periods (start_date, end_date, budget_amount, is_current, pay_period_type)
+            VALUES (?, ?, 500.00, 1, ?)
+        ''', (start_date, end_date, pay_period_type))
         period_id = cursor.lastrowid
         conn.commit()
         cursor.execute('SELECT * FROM budget_periods WHERE id = ?', (period_id,))
         period = cursor.fetchone()
-    
+
     conn.close()
     return period
+
+def get_previous_budget_period():
+    """Get the budget period that ended before the current one"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    current_period = get_current_budget_period()
+
+    cursor.execute('''
+        SELECT * FROM budget_periods
+        WHERE end_date < ?
+        ORDER BY end_date DESC LIMIT 1
+    ''', (current_period['start_date'],))
+    period = cursor.fetchone()
+    conn.close()
+    return period
+
+def get_previous_period_spending(period=None):
+    """Get total spending for previous budget period"""
+    if not period:
+        period = get_previous_budget_period()
+
+    if not period:
+        return 0
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT SUM(price) as total_spent
+        FROM spending_log
+        WHERE date BETWEEN ? AND ?
+    ''', (period['start_date'], period['end_date']))
+
+    result = cursor.fetchone()
+    conn.close()
+    return float(result['total_spent']) if result['total_spent'] else 0
 
 @app.route('/')
 def dashboard():
@@ -318,13 +376,63 @@ def add_spending():
 def delete_spending(entry_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute('DELETE FROM spending_log WHERE id = ?', (entry_id,))
     conn.commit()
     conn.close()
-    
+
     flash('Spending entry deleted', 'success')
     return redirect(url_for('spending'))
+
+@app.route('/spending/edit/<int:entry_id>', methods=['GET', 'POST'])
+def edit_spending(entry_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    if request.method == 'GET':
+        # Get the spending entry for editing
+        cursor.execute('SELECT * FROM spending_log WHERE id = ?', (entry_id,))
+        entry = cursor.fetchone()
+        conn.close()
+
+        if not entry:
+            flash('Spending entry not found', 'error')
+            return redirect(url_for('spending'))
+
+        return jsonify({
+            'id': entry['id'],
+            'date': entry['date'].strftime('%Y-%m-%d') if entry['date'] else '',
+            'item': entry['item'],
+            'price': float(entry['price'])
+        })
+
+    elif request.method == 'POST':
+        # Update the spending entry
+        date_str = request.form.get('date')
+        item = request.form.get('item')
+        price = float(request.form.get('price'))
+
+        if not item or price <= 0:
+            flash('Please provide valid item and price', 'error')
+            conn.close()
+            return redirect(url_for('spending'))
+
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+        cursor.execute('''
+            UPDATE spending_log
+            SET date = ?, item = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (date_obj, item, price, entry_id))
+
+        if cursor.rowcount == 0:
+            flash('Spending entry not found', 'error')
+        else:
+            flash(f'Updated {item} to ${price:.2f}', 'success')
+
+        conn.commit()
+        conn.close()
+        return redirect(url_for('spending'))
 
 # NEW ROUTES FOR ANALYTICS
 @app.route('/analytics')
@@ -1129,6 +1237,28 @@ def auto_update_portfolio():
         'suggestion': 'Future versions will integrate with financial APIs for automatic updates'
     }), 501
 
+@app.route('/api/previous_spending')
+def api_previous_spending():
+    """API endpoint for previous budget period spending data"""
+    previous_period = get_previous_budget_period()
+    previous_spending = get_previous_period_spending(previous_period)
+
+    if previous_period:
+        return jsonify({
+            'has_previous_period': True,
+            'previous_period': {
+                'start_date': previous_period['start_date'],
+                'end_date': previous_period['end_date'],
+                'budget_amount': float(previous_period['budget_amount']),
+                'total_spent': previous_spending
+            }
+        })
+    else:
+        return jsonify({
+            'has_previous_period': False,
+            'message': 'No previous budget period found'
+        })
+
 # Add these routes to your app.py file
 
 @app.route('/savings/update_expense/<int:expense_id>', methods=['POST'])
@@ -1237,23 +1367,43 @@ def savings():
         period_end = datetime.strptime(period_end, '%Y-%m-%d').date()
     
     today = get_toronto_date()
-    
-    # Determine which half we're in based on budget period progress
-    total_days = (period_end - period_start).days + 1
-    days_elapsed = (today - period_start).days + 1
-    
-    # If we're in the first half of the budget period, use half 1, otherwise half 2
-    current_half = 1 if days_elapsed <= (total_days / 2) else 2
-    
-    # Get spending for CURRENT BUDGET PERIOD (not calendar month)
+
+    # Use automatic pay period detection from budget_periods table
+    current_half = budget_period['pay_period_type'] if 'pay_period_type' in budget_period.keys() and budget_period['pay_period_type'] else determine_pay_period_type(period_start, period_end)
+
+    # Get spending period choice from URL parameter (default: current)
+    spending_period_choice = request.args.get('spending_period', 'current')
+
+    # Get spending for CURRENT BUDGET PERIOD
     cursor.execute('''
         SELECT SUM(price) as total_spent
-        FROM spending_log 
+        FROM spending_log
         WHERE date >= ? AND date <= ?
     ''', (period_start, period_end))
-    
+
     spending_result = cursor.fetchone()
     current_spending = float(spending_result['total_spent']) if spending_result['total_spent'] else 0.0
+
+    # Get previous period data
+    previous_period = get_previous_budget_period()
+    previous_spending = get_previous_period_spending(previous_period)
+
+    # Determine which spending to use based on user selection
+    if spending_period_choice == 'previous' and previous_period:
+        selected_spending = previous_spending
+        selected_period_info = {
+            'start_date': previous_period['start_date'],
+            'end_date': previous_period['end_date'],
+            'type': 'Previous Pay Period'
+        }
+    else:
+        selected_spending = current_spending
+        selected_period_info = {
+            'start_date': period_start,
+            'end_date': period_end,
+            'type': 'Current Pay Period'
+        }
+        spending_period_choice = 'current'  # Ensure default if previous not available
     
     # Get ALL expenses from database (both custom and default)
     cursor.execute('''
@@ -1339,17 +1489,20 @@ def savings():
     
     # Get recent savings calculations
     cursor.execute('''
-        SELECT * FROM savings_calculations 
-        ORDER BY created_at DESC 
+        SELECT * FROM savings_calculations
+        ORDER BY created_at DESC
         LIMIT 5
     ''')
     recent_calculations = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template('savings.html',
                          config=config,
                          current_spending=current_spending,
+                         selected_spending=selected_spending,
+                         selected_period_info=selected_period_info,
+                         spending_period_choice=spending_period_choice,
                          fixed_expenses=fixed_expenses,
                          total_fixed_expenses=total_fixed_expenses,
                          current_half=current_half,
@@ -1359,6 +1512,8 @@ def savings():
                          recent_calculations=recent_calculations,
                          all_first_half=first_half_expenses,
                          all_second_half=second_half_expenses,
+                         previous_period=previous_period,
+                         previous_spending=previous_spending,
                          today=today)
 
 # Also fix the add_fixed_expense route to include is_custom:
@@ -1422,6 +1577,7 @@ def calculate_savings():
         investorline_percentage = float(request.form.get('investorline_percentage', 35))
         usd_percentage = float(request.form.get('usd_percentage', 25))
         pay_period_half = int(request.form.get('pay_period_half', 1))
+        spending_period_choice = request.form.get('spending_period_choice', 'current')
         
         # Validate percentages add up to 100
         total_percentage = savings_percentage + investorline_percentage + usd_percentage
@@ -1447,15 +1603,27 @@ def calculate_savings():
         if isinstance(period_end, str):
             period_end = datetime.strptime(period_end, '%Y-%m-%d').date()
         
-        # Get actual spending from database for current budget period
-        cursor.execute('''
-            SELECT SUM(price) as total_spent
-            FROM spending_log 
-            WHERE date >= ? AND date <= ?
-        ''', (period_start, period_end))
-        
-        spending_result = cursor.fetchone()
-        current_spending = float(spending_result['total_spent']) if spending_result['total_spent'] else 0.0
+        # Get spending based on user selection
+        if spending_period_choice == 'previous':
+            # Get previous period spending
+            previous_period = get_previous_budget_period()
+            if previous_period:
+                selected_spending = get_previous_period_spending(previous_period)
+                spending_period_label = f"Previous Period ({previous_period['start_date']} to {previous_period['end_date']})"
+            else:
+                selected_spending = 0.0
+                spending_period_label = "Previous Period (none available)"
+        else:
+            # Get current period spending
+            cursor.execute('''
+                SELECT SUM(price) as total_spent
+                FROM spending_log
+                WHERE date >= ? AND date <= ?
+            ''', (period_start, period_end))
+
+            spending_result = cursor.fetchone()
+            selected_spending = float(spending_result['total_spent']) if spending_result['total_spent'] else 0.0
+            spending_period_label = f"Current Period ({period_start} to {period_end})"
         
         # Get fixed expenses from database for the selected period
         cursor.execute('''
@@ -1467,8 +1635,8 @@ def calculate_savings():
         fixed_result = cursor.fetchone()
         total_fixed_expenses = float(fixed_result['total_fixed']) if fixed_result['total_fixed'] else 0.0
         
-        # Calculate totals - THIS IS THE KEY FIX
-        total_expenses = current_spending + total_fixed_expenses  # TOTAL expenses, not just fixed
+        # Calculate totals using selected spending period
+        total_expenses = selected_spending + total_fixed_expenses  # TOTAL expenses, not just fixed
         available_for_allocation = biweekly_income - total_expenses
         
         if available_for_allocation <= 0:
@@ -1489,22 +1657,22 @@ def calculate_savings():
         ''', (savings_percentage, investorline_percentage, usd_percentage, 
               biweekly_income, pay_period_half))
         
-        # Save calculation results - FIXED: Save total_expenses instead of just fixed_expenses
+        # Save calculation results - using selected spending period
         cursor.execute('''
-            INSERT INTO savings_calculations 
+            INSERT INTO savings_calculations
             (biweekly_income, current_spending, fixed_expenses, total_expenses,
-             available_for_allocation, savings_amount, investorline_amount, 
+             available_for_allocation, savings_amount, investorline_amount,
              usd_amount, pay_period_half, period_start, period_end, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (biweekly_income, current_spending, total_fixed_expenses, total_expenses,  # FIXED: total_expenses
+        ''', (biweekly_income, selected_spending, total_fixed_expenses, total_expenses,
               available_for_allocation, savings_amount, investorline_amount,
               usd_amount, pay_period_half, period_start, period_end))
         
         conn.commit()
         conn.close()
         
-        flash('Savings allocation calculated successfully!', 'success')
-        return redirect(url_for('savings'))
+        flash(f'Savings allocation calculated successfully using {spending_period_label}!', 'success')
+        return redirect(url_for('savings', spending_period=spending_period_choice))
         
     except ValueError as e:
         flash('Please enter valid numeric values', 'error')
@@ -1563,17 +1731,52 @@ def clear_savings_calculations():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Delete all calculations
         cursor.execute('DELETE FROM savings_calculations')
         conn.commit()
         conn.close()
-        
+
         flash('All savings calculations cleared successfully!', 'success')
         return redirect(url_for('savings'))
-        
+
     except Exception as e:
         flash(f'Error clearing calculations: {str(e)}', 'error')
+        return redirect(url_for('savings'))
+
+@app.route('/savings/override_pay_period', methods=['POST'])
+def override_pay_period():
+    """Manually override the automatic pay period detection"""
+    try:
+        new_period_type = int(request.form.get('pay_period_type', 1))
+
+        if new_period_type not in [1, 2]:
+            flash('Invalid pay period type. Must be 1 or 2.', 'error')
+            return redirect(url_for('savings'))
+
+        current_period = get_current_budget_period()
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE budget_periods
+            SET pay_period_type = ?
+            WHERE id = ?
+        ''', (new_period_type, current_period['id']))
+
+        conn.commit()
+        conn.close()
+
+        period_text = "1st half" if new_period_type == 1 else "2nd half"
+        flash(f'Pay period manually set to {period_text}', 'success')
+        return redirect(url_for('savings'))
+
+    except ValueError:
+        flash('Please provide a valid pay period type', 'error')
+        return redirect(url_for('savings'))
+    except Exception as e:
+        flash(f'Error updating pay period: {str(e)}', 'error')
         return redirect(url_for('savings'))
 
 # CONDO MANAGEMENT ROUTES
