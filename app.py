@@ -686,25 +686,102 @@ def update_etf_holdings():
     nas_value = float(request.form.get('nas_value', 0))
     btcc_value = float(request.form.get('btcc_value', 0))
     zsp_value = float(request.form.get('zsp_value', 0))
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Clear existing holdings and insert new ones
-    cursor.execute('DELETE FROM etf_holdings')
-    
-    if nas_value > 0:
-        cursor.execute('INSERT INTO etf_holdings (etf_symbol, purchase_value) VALUES (?, ?)', ('NAS', nas_value))
-    if btcc_value > 0:
-        cursor.execute('INSERT INTO etf_holdings (etf_symbol, purchase_value) VALUES (?, ?)', ('BTCC', btcc_value))
-    if zsp_value > 0:
-        cursor.execute('INSERT INTO etf_holdings (etf_symbol, purchase_value) VALUES (?, ?)', ('ZSP', zsp_value))
-    
+
+    # Update or insert ETF holdings (don't delete existing ones)
+    etf_updates = [
+        ('NAS', nas_value),
+        ('BTCC', btcc_value),
+        ('ZSP', zsp_value)
+    ]
+
+    for symbol, value in etf_updates:
+        if value > 0:
+            # Check if ETF already exists
+            cursor.execute('SELECT id, purchase_value FROM etf_holdings WHERE etf_symbol = ?', (symbol,))
+            existing = cursor.fetchone()
+
+            if existing:
+                # Update existing ETF holding
+                cursor.execute('''
+                    UPDATE etf_holdings
+                    SET purchase_value = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE etf_symbol = ?
+                ''', (value, symbol))
+            else:
+                # Insert new ETF holding
+                cursor.execute('''
+                    INSERT INTO etf_holdings (etf_symbol, purchase_value, created_at, updated_at)
+                    VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ''', (symbol, value))
+
     conn.commit()
     conn.close()
-    
+
     flash('ETF holdings updated successfully!', 'success')
     return redirect(url_for('portfolio'))
+
+@app.route('/portfolio/transact_etf', methods=['POST'])
+def transact_etf():
+    """Handle ETF buy/sell transactions to properly accumulate values"""
+    try:
+        etf_symbol = request.form.get('etf_symbol', '').upper()
+        transaction_type = request.form.get('transaction_type', 'buy')  # buy or sell
+        amount = float(request.form.get('amount', 0))
+
+        if not etf_symbol or amount <= 0:
+            flash('Please provide valid ETF symbol and amount', 'error')
+            return redirect(url_for('portfolio'))
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Get current holding
+        cursor.execute('SELECT id, purchase_value FROM etf_holdings WHERE etf_symbol = ?', (etf_symbol,))
+        existing = cursor.fetchone()
+
+        if existing:
+            current_value = float(existing['purchase_value'])
+            if transaction_type == 'buy':
+                new_value = current_value + amount
+            else:  # sell
+                new_value = max(0, current_value - amount)  # Prevent negative values
+
+            # Update existing holding
+            cursor.execute('''
+                UPDATE etf_holdings
+                SET purchase_value = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE etf_symbol = ?
+            ''', (new_value, etf_symbol))
+
+            action = "Added" if transaction_type == 'buy' else "Removed"
+            flash(f'{action} ${amount:.2f} to {etf_symbol} (New total: ${new_value:.2f})', 'success')
+        else:
+            if transaction_type == 'buy':
+                # Create new holding
+                cursor.execute('''
+                    INSERT INTO etf_holdings (etf_symbol, purchase_value, created_at, updated_at)
+                    VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ''', (etf_symbol, amount))
+                flash(f'Created new {etf_symbol} holding with ${amount:.2f}', 'success')
+            else:
+                flash(f'Cannot sell {etf_symbol} - no existing holding found', 'error')
+                conn.close()
+                return redirect(url_for('portfolio'))
+
+        conn.commit()
+        conn.close()
+
+        return redirect(url_for('portfolio'))
+
+    except ValueError:
+        flash('Please enter a valid numeric amount', 'error')
+        return redirect(url_for('portfolio'))
+    except Exception as e:
+        flash(f'Error processing transaction: {str(e)}', 'error')
+        return redirect(url_for('portfolio'))
 
 @app.route('/api/analytics')
 def api_analytics():

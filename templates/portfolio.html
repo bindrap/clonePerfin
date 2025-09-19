@@ -214,6 +214,60 @@
     </div>
 </div>
 
+<!-- ETF Transaction Management -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5><i class="fas fa-exchange-alt"></i> ETF Buy/Sell Transactions</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Use this form to properly track ETF purchases and sales. This will add or subtract from your existing holdings.</p>
+                <form method="POST" action="{{ url_for('transact_etf') }}">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="etf_symbol" class="form-label">ETF Symbol</label>
+                                <select class="form-control" id="etf_symbol" name="etf_symbol" required>
+                                    <option value="">Select ETF</option>
+                                    <option value="NAS">NAS (NASDAQ)</option>
+                                    <option value="BTCC">BTCC (Bitcoin)</option>
+                                    <option value="ZSP">ZSP (S&P 500)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="transaction_type" class="form-label">Transaction Type</label>
+                                <select class="form-control" id="transaction_type" name="transaction_type" required>
+                                    <option value="buy">Buy (Add to holding)</option>
+                                    <option value="sell">Sell (Remove from holding)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="amount" class="form-label">Amount ($)</label>
+                                <input type="number" class="form-control" id="amount" name="amount"
+                                       step="0.01" min="0" placeholder="400.00" required>
+                                <small class="text-muted">Amount to add/subtract</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label">&nbsp;</label>
+                                <button type="submit" class="btn btn-success form-control">
+                                    <i class="fas fa-plus-circle"></i> Execute Transaction
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Portfolio Performance Chart -->
 {% if performance_history %}
 <div class="row mb-4">
