@@ -52,10 +52,14 @@
             </div>
             <div class="card-body">
                 {% for category in detailed_categories %}
-                <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="d-flex justify-content-between align-items-center mb-2 {% if category.category == 'Other' %}category-clickable{% endif %}"
+                     {% if category.category == 'Other' %}onclick="showOtherCategoryModal()" style="cursor: pointer;"{% endif %}>
                     <div>
                         <span class="fw-bold">{{ category.category }}</span>
                         <small class="text-muted">({{ category.count }} items)</small>
+                        {% if category.category == 'Other' %}
+                        <i class="fas fa-info-circle text-info ms-2" title="Click to see breakdown"></i>
+                        {% endif %}
                     </div>
                     <span class="badge bg-primary">${{ "%.2f"|format(category.total) }}</span>
                 </div>
@@ -214,12 +218,106 @@
         </div>
     </div>
 </div>
+
+<!-- Other Category Modal -->
+<div class="modal fade" id="otherCategoryModal" tabindex="-1" aria-labelledby="otherCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px);">
+            <div class="modal-header">
+                <h5 class="modal-title" id="otherCategoryModalLabel">
+                    <i class="fas fa-tags"></i> "Other" Category Breakdown
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="otherCategoryContent">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin"></i> Loading breakdown...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <small class="text-muted">Items not matching specific categories (TIMS, Food, Gas, etc.)</small>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 // Global variable to store the weekly activity chart reference
 let weeklyActivityChartInstance = null;
+
+// Function to show Other category modal
+function showOtherCategoryModal() {
+    const modal = new bootstrap.Modal(document.getElementById('otherCategoryModal'));
+    modal.show();
+
+    // Load Other category data
+    fetch('/api/analytics/other_category')
+        .then(response => response.json())
+        .then(data => {
+            const content = document.getElementById('otherCategoryContent');
+
+            if (data.items && data.items.length > 0) {
+                let html = `
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <h6>Total: $${data.total.toFixed(2)} (${data.items.length} items)</h6>
+                        </div>
+                    </div>
+                    <div class="row">
+                `;
+
+                data.items.forEach((item, index) => {
+                    html += `
+                        <div class="col-md-6 mb-2">
+                            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+                                <div>
+                                    <span class="fw-bold">${item.item}</span>
+                                    <small class="text-muted d-block">${item.frequency}x purchases</small>
+                                </div>
+                                <span class="badge bg-secondary">$${item.total.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+                content.innerHTML = html;
+            } else {
+                content.innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="fas fa-inbox"></i>
+                        <p>No items found in "Other" category</p>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching Other category data:', error);
+            document.getElementById('otherCategoryContent').innerHTML = `
+                <div class="text-center text-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error loading Other category data</p>
+                </div>
+            `;
+        });
+}
+
+// Add CSS for clickable category
+const style = document.createElement('style');
+style.textContent = `
+    .category-clickable:hover {
+        background-color: rgba(0, 123, 255, 0.1);
+        border-radius: 6px;
+        transform: translateX(3px);
+        transition: all 0.2s ease;
+    }
+`;
+document.head.appendChild(style);
 
 // Weekly Trends Chart
 const weeklyData = {{ weekly_trends | tojsonfilter | safe }};

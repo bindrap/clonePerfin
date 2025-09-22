@@ -203,34 +203,24 @@ def dashboard():
         'total_tracked_days': total_days
     }
     
-    # Enhanced spending categorization
+    # Top spending items instead of categories
     cursor.execute('''
-        SELECT 
-            CASE 
-                WHEN LOWER(item) LIKE '%tim%' OR LOWER(item) LIKE '%tims%' THEN 'TIMS'
-                WHEN LOWER(item) LIKE '%coffee%' AND LOWER(item) NOT LIKE '%tim%' THEN 'Coffee (Other)'
-                WHEN LOWER(item) LIKE '%gas%' OR LOWER(item) LIKE '%fuel%' OR LOWER(item) LIKE '%petro%' THEN 'Gas'
-                WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%cannabis%' THEN 'Dispo'
-                WHEN LOWER(item) LIKE '%lcbo%' OR LOWER(item) LIKE '%alcohol%' OR LOWER(item) LIKE '%beer%' OR LOWER(item) LIKE '%wine%' THEN 'LCBO'
-                WHEN LOWER(item) LIKE '%mcdonald%' OR LOWER(item) LIKE '%mcds%' THEN 'McDonalds'
-                WHEN LOWER(item) LIKE '%domino%' THEN 'Dominos'
-                WHEN LOWER(item) LIKE '%food%' OR LOWER(item) LIKE '%restaurant%' OR LOWER(item) LIKE '%wendys%' OR LOWER(item) LIKE '%pizza%' OR LOWER(item) LIKE '%taco%' OR LOWER(item) LIKE '%burger%' OR LOWER(item) LIKE '%arbys%' OR LOWER(item) LIKE '%osmow%' OR LOWER(item) LIKE '%shawarma%' THEN 'Food'
-                WHEN LOWER(item) LIKE '%gym%' OR LOWER(item) LIKE '%fit%' OR LOWER(item) LIKE '%workout%' THEN 'Fitness'
-                WHEN LOWER(item) LIKE '%gift%' THEN 'Gifts'
-                WHEN LOWER(item) LIKE '%wash%' OR LOWER(item) LIKE '%car%' THEN 'Car Care'
-                ELSE 'Other'
-            END as category,
-            SUM(price) as total
-        FROM spending_log 
+        SELECT
+            item,
+            SUM(price) as total,
+            COUNT(*) as frequency,
+            MAX(date) as last_purchase
+        FROM spending_log
         WHERE date >= ?
-        GROUP BY category
+        GROUP BY item
         ORDER BY total DESC
+        LIMIT 10
     ''', (thirty_days_ago,))
-    spending_by_category = cursor.fetchall()
+    top_spending_items = cursor.fetchall()
     
     conn.close()
     
-    return render_template('dashboard.html', 
+    return render_template('dashboard.html',
                          budget_period=budget_period,
                          total_spent=total_spent,
                          remaining_budget=remaining_budget,
@@ -238,7 +228,7 @@ def dashboard():
                          daily_spend_limit=daily_spend_limit,
                          activity_stats=activity_stats,
                          activity_percentages=activity_percentages,
-                         spending_by_category=spending_by_category,
+                         top_spending_items=top_spending_items,
                          today=today)
 
 @app.route('/personal')
@@ -609,28 +599,42 @@ def portfolio():
     
     # Get portfolio performance over time from portfolio_log
     cursor.execute('''
-        SELECT 
-            date, 
+        SELECT
+            date,
             total_portfolio_value as total_market_value,
-            CASE 
-                WHEN total_portfolio_value > 0 THEN 
+            CASE
+                WHEN total_portfolio_value > 0 THEN
                     ((total_portfolio_value - ?) / ? * 100)
-                ELSE 0 
+                ELSE 0
             END as profit_loss_percentage
-        FROM portfolio_log 
+        FROM portfolio_log
         WHERE total_portfolio_value > 0
-        ORDER BY date DESC 
+        ORDER BY date DESC
         LIMIT 30
     ''', (total_invested, total_invested if total_invested > 0 else 1))
     performance_history = cursor.fetchall()
-    
+
+    # Get current ETF holdings for form display
+    cursor.execute('''
+        SELECT etf_symbol, purchase_value
+        FROM etf_holdings
+        ORDER BY etf_symbol
+    ''')
+    etf_holdings_raw = cursor.fetchall()
+
+    # Convert to dictionary for easy template access
+    current_holdings = {}
+    for holding in etf_holdings_raw:
+        current_holdings[holding['etf_symbol']] = float(holding['purchase_value'])
+
     conn.close()
-    
+
     return render_template('portfolio.html',
                          latest_snapshot=latest_snapshot,
                          recent_entries=recent_entries,
                          portfolio_summary=portfolio_summary,
-                         performance_history=performance_history)
+                         performance_history=performance_history,
+                         current_holdings=current_holdings)
 
 @app.route('/portfolio/update', methods=['POST'])
 def update_portfolio():
@@ -770,6 +774,54 @@ def transact_etf():
                 flash(f'Cannot sell {etf_symbol} - no existing holding found', 'error')
                 conn.close()
                 return redirect(url_for('portfolio'))
+
+        # Update the current market values in portfolio_log to reflect the transaction
+        today = get_toronto_date()
+
+        # Get the latest portfolio values
+        cursor.execute('''
+            SELECT total_portfolio_value, nasdaq_value, btcc_value, zsp_value
+            FROM portfolio_log
+            ORDER BY date DESC LIMIT 1
+        ''')
+        latest = cursor.fetchone()
+
+        if latest:
+            # Adjust the market value for the ETF that was traded
+            nasdaq_value = float(latest['nasdaq_value']) if latest['nasdaq_value'] else 0
+            btcc_value = float(latest['btcc_value']) if latest['btcc_value'] else 0
+            zsp_value = float(latest['zsp_value']) if latest['zsp_value'] else 0
+
+            # Apply the transaction amount to the appropriate ETF market value
+            if etf_symbol == 'NAS':
+                if transaction_type == 'buy':
+                    nasdaq_value += amount
+                else:
+                    nasdaq_value = max(0, nasdaq_value - amount)
+            elif etf_symbol == 'BTCC':
+                if transaction_type == 'buy':
+                    btcc_value += amount
+                else:
+                    btcc_value = max(0, btcc_value - amount)
+            elif etf_symbol == 'ZSP':
+                if transaction_type == 'buy':
+                    zsp_value += amount
+                else:
+                    zsp_value = max(0, zsp_value - amount)
+
+            # Calculate new total
+            new_total = nasdaq_value + btcc_value + zsp_value
+
+            # Calculate difference from previous value
+            prev_total = float(latest['total_portfolio_value']) if latest['total_portfolio_value'] else 0
+            difference = new_total - prev_total
+
+            # Update today's portfolio log with new values
+            cursor.execute('''
+                INSERT OR REPLACE INTO portfolio_log
+                (date, total_portfolio_value, nasdaq_value, btcc_value, zsp_value, trade_cash, difference)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (today, new_total, nasdaq_value, btcc_value, zsp_value, 0, difference))
 
         conn.commit()
         conn.close()
@@ -916,6 +968,61 @@ def api_detailed_analytics():
         'category_trends': category_trends,
         'monthly_daily_averages': monthly_daily_averages,
         'overall_stats': dict(overall_stats)
+    })
+
+@app.route('/api/analytics/other_category')
+def api_analytics_other_category():
+    """API endpoint for Other category breakdown"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    thirty_days_ago = (datetime.now() - timedelta(days=30)).date()
+
+    # Get items that fall into "Other" category
+    cursor.execute('''
+        SELECT
+            item,
+            SUM(price) as total,
+            COUNT(*) as frequency
+        FROM spending_log
+        WHERE date >= ?
+        AND NOT (
+            LOWER(item) LIKE '%tim%' OR LOWER(item) LIKE '%tims%' OR
+            LOWER(item) LIKE '%coffee%' OR
+            LOWER(item) LIKE '%gas%' OR LOWER(item) LIKE '%fuel%' OR LOWER(item) LIKE '%petro%' OR
+            LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%cannabis%' OR
+            LOWER(item) LIKE '%lcbo%' OR LOWER(item) LIKE '%alcohol%' OR LOWER(item) LIKE '%beer%' OR LOWER(item) LIKE '%wine%' OR
+            LOWER(item) LIKE '%mcdonald%' OR LOWER(item) LIKE '%mcds%' OR
+            LOWER(item) LIKE '%domino%' OR
+            LOWER(item) LIKE '%food%' OR LOWER(item) LIKE '%restaurant%' OR LOWER(item) LIKE '%wendys%' OR
+            LOWER(item) LIKE '%pizza%' OR LOWER(item) LIKE '%taco%' OR LOWER(item) LIKE '%burger%' OR
+            LOWER(item) LIKE '%arbys%' OR LOWER(item) LIKE '%osmow%' OR LOWER(item) LIKE '%shawarma%' OR
+            LOWER(item) LIKE '%gym%' OR LOWER(item) LIKE '%fit%' OR LOWER(item) LIKE '%workout%' OR
+            LOWER(item) LIKE '%gift%' OR
+            LOWER(item) LIKE '%wash%' OR LOWER(item) LIKE '%car%'
+        )
+        GROUP BY item
+        ORDER BY total DESC
+    ''', (thirty_days_ago,))
+
+    other_items = cursor.fetchall()
+
+    # Calculate total
+    total_amount = sum(float(item['total']) for item in other_items)
+
+    conn.close()
+
+    return jsonify({
+        'items': [
+            {
+                'item': item['item'],
+                'total': float(item['total']),
+                'frequency': item['frequency']
+            }
+            for item in other_items
+        ],
+        'total': total_amount,
+        'count': len(other_items)
     })
 
 @app.route('/api/analytics/activities')

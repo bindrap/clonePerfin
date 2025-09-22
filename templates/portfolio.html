@@ -90,33 +90,58 @@
                 <h5><i class="fas fa-refresh"></i> Manual ETF Value Update</h5>
             </div>
             <div class="card-body">
+                <div class="alert alert-warning mb-3">
+                    <small><i class="fas fa-info-circle"></i> <strong>Note:</strong> This updates current market values. Purchase amounts are managed separately in "ETF Holdings Configuration" below.</small>
+                </div>
                 <form method="POST" action="{{ url_for('update_portfolio') }}">
                     <div class="mb-3">
                         <label for="nasdaq_value" class="form-label">NASDAQ/NAS Value ($)</label>
-                        <input type="number" class="form-control" id="nasdaq_value" name="nasdaq_value" 
-                               step="0.01" min="0" placeholder="21000.00" 
+                        <input type="number" class="form-control" id="nasdaq_value" name="nasdaq_value"
+                               step="0.01" min="0" placeholder="21000.00"
                                value="{{ latest_snapshot.nasdaq_value if latest_snapshot else '' }}" required>
-                        <small class="text-muted">Current total value of NAS holdings</small>
+                        <small class="text-muted">Current total market value of NAS holdings
+                            {% if current_holdings and current_holdings.NAS %}
+                            <br>Purchase value: ${{ "%.2f"|format(current_holdings.NAS) }}
+                            {% endif %}
+                        </small>
                     </div>
                     
                     <div class="mb-3">
                         <label for="btcc_value" class="form-label">BTCC Value ($)</label>
-                        <input type="number" class="form-control" id="btcc_value" name="btcc_value" 
-                               step="0.01" min="0" placeholder="2600.00" 
+                        <input type="number" class="form-control" id="btcc_value" name="btcc_value"
+                               step="0.01" min="0" placeholder="2600.00"
                                value="{{ latest_snapshot.btcc_value if latest_snapshot else '' }}" required>
-                        <small class="text-muted">Current total value of BTCC holdings</small>
+                        <small class="text-muted">Current total market value of BTCC holdings
+                            {% if current_holdings and current_holdings.BTCC %}
+                            <br>Purchase value: ${{ "%.2f"|format(current_holdings.BTCC) }}
+                            {% endif %}
+                        </small>
                     </div>
                     
                     <div class="mb-3">
                         <label for="zsp_value" class="form-label">ZSP Value ($)</label>
-                        <input type="number" class="form-control" id="zsp_value" name="zsp_value" 
-                               step="0.01" min="0" placeholder="23000.00" 
+                        <input type="number" class="form-control" id="zsp_value" name="zsp_value"
+                               step="0.01" min="0" placeholder="23000.00"
                                value="{{ latest_snapshot.zsp_value if latest_snapshot else '' }}" required>
-                        <small class="text-muted">Current total value of ZSP holdings</small>
+                        <small class="text-muted">Current total market value of ZSP holdings
+                            {% if current_holdings and current_holdings.ZSP %}
+                            <br>Purchase value: ${{ "%.2f"|format(current_holdings.ZSP) }}
+                            {% endif %}
+                        </small>
                     </div>
                     
                     <div class="alert alert-info">
                         <small>Total: $<span id="total_value">0.00</span></small>
+                        {% if current_holdings %}
+                        <hr style="margin: 8px 0;">
+                        <small class="text-muted">
+                            <strong>Your Holdings:</strong>
+                            NAS: ${{ "%.2f"|format(current_holdings.NAS) if current_holdings.NAS else 0 }},
+                            BTCC: ${{ "%.2f"|format(current_holdings.BTCC) if current_holdings.BTCC else 0 }},
+                            ZSP: ${{ "%.2f"|format(current_holdings.ZSP) if current_holdings.ZSP else 0 }}
+                            (purchase values)
+                        </small>
+                        {% endif %}
                     </div>
                     
                     <button type="submit" class="btn btn-success w-100">
@@ -177,29 +202,44 @@
                         <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="nas_value" class="form-label">NAS Purchase Value ($)</label>
-                                <input type="number" class="form-control" id="nas_value" name="nas_value" 
-                                       step="0.01" min="0" placeholder="19164.42" required>
-                                <small class="text-muted">Total amount invested in NAS ETF</small>
+                                <input type="number" class="form-control" id="nas_value" name="nas_value"
+                                       step="0.01" min="0" placeholder="19164.42"
+                                       value="{{ current_holdings.NAS if current_holdings else '' }}" required>
+                                <small class="text-muted">Total amount invested in NAS ETF
+                                    {% if current_holdings and current_holdings.NAS %}
+                                    <br><strong>Current: ${{ "%.2f"|format(current_holdings.NAS) }}</strong>
+                                    {% endif %}
+                                </small>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="etf_btcc_value" class="form-label">BTCC Purchase Value ($)</label>
-                                <input type="number" class="form-control" id="etf_btcc_value" name="btcc_value" 
-                                       step="0.01" min="0" placeholder="2630.15" required>
-                                <small class="text-muted">Total amount invested in BTCC ETF</small>
+                                <input type="number" class="form-control" id="etf_btcc_value" name="btcc_value"
+                                       step="0.01" min="0" placeholder="2630.15"
+                                       value="{{ current_holdings.BTCC if current_holdings else '' }}" required>
+                                <small class="text-muted">Total amount invested in BTCC ETF
+                                    {% if current_holdings and current_holdings.BTCC %}
+                                    <br><strong>Current: ${{ "%.2f"|format(current_holdings.BTCC) }}</strong>
+                                    {% endif %}
+                                </small>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="etf_zsp_value" class="form-label">ZSP Purchase Value ($)</label>
-                                <input type="number" class="form-control" id="etf_zsp_value" name="zsp_value" 
-                                       step="0.01" min="0" placeholder="20006.17" required>
-                                <small class="text-muted">Total amount invested in ZSP ETF</small>
+                                <input type="number" class="form-control" id="etf_zsp_value" name="zsp_value"
+                                       step="0.01" min="0" placeholder="20006.17"
+                                       value="{{ current_holdings.ZSP if current_holdings else '' }}" required>
+                                <small class="text-muted">Total amount invested in ZSP ETF
+                                    {% if current_holdings and current_holdings.ZSP %}
+                                    <br><strong>Current: ${{ "%.2f"|format(current_holdings.ZSP) }}</strong>
+                                    {% endif %}
+                                </small>
                             </div>
                         </div>
                     </div>
-                    
+
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save"></i> Update ETF Holdings
                     </button>

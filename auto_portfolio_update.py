@@ -262,35 +262,75 @@ def get_current_price_aggressive(symbol):
     print(f"[FALLBACK] Using fallback price for {symbol}: ${fallback:.2f}")
     return fallback
 
+def get_etf_holdings_from_db():
+    """Get current ETF purchase values from database"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT etf_symbol, purchase_value
+            FROM etf_holdings
+            ORDER BY etf_symbol
+        ''')
+        holdings = cursor.fetchall()
+        conn.close()
+
+        holdings_dict = {}
+        for holding in holdings:
+            holdings_dict[holding['etf_symbol']] = float(holding['purchase_value'])
+
+        return holdings_dict
+
+    except Exception as e:
+        print(f"[ERROR] Error fetching ETF holdings from database: {e}")
+        # Fallback to reasonable defaults
+        return {
+            'NAS': 20000.00,
+            'BTCC': 2600.00,
+            'ZSP': 23000.00
+        }
+
 def fetch_current_etf_prices():
     """Fetch current ETF prices aggressively"""
     print("[AGGRESSIVE MODE] Fetching real-time ETF prices...")
-    
-    # Use last NASDAQ value from database
-    nasdaq_value = get_latest_nasdaq_value_from_db()
-    print(f"[MANUAL] Using NASDAQ value from database: ${nasdaq_value:,.2f}")
-    
-    # Share holdings
-    share_holdings = {
-        'NASDAQ': 1123.175,
+
+    # Get current ETF holdings from database
+    etf_holdings = get_etf_holdings_from_db()
+    print(f"[DATABASE] Current ETF holdings:")
+    for symbol, value in etf_holdings.items():
+        print(f"  {symbol}: ${value:,.2f} (purchase value)")
+
+    # Use current NASDAQ/NAS value from holdings
+    nasdaq_value = etf_holdings.get('NAS', 22000.00)
+    print(f"[HOLDINGS] Using NAS value from holdings: ${nasdaq_value:,.2f}")
+
+    # Fixed share quantities for price calculation (these shouldn't change often)
+    share_quantities = {
         'BTCC': 122.0,
         'ZSP': 234.0
     }
-    
+
     prices = {
         'nasdaq_value': nasdaq_value
     }
-    
+
     # Get BTCC price aggressively
     print()
     btcc_price = get_current_price_aggressive('BTCC-B.TO')
-    prices['btcc_value'] = share_holdings['BTCC'] * btcc_price
-    
+    # Calculate market value based on current shares
+    btcc_shares = share_quantities['BTCC']
+    prices['btcc_value'] = btcc_shares * btcc_price
+    print(f"[CALC] BTCC: {btcc_shares} shares × ${btcc_price:.2f} = ${prices['btcc_value']:,.2f}")
+
     print()
-    # Get ZSP price aggressively  
+    # Get ZSP price aggressively
     zsp_price = get_current_price_aggressive('ZSP.TO')
-    prices['zsp_value'] = share_holdings['ZSP'] * zsp_price
-    
+    # Calculate market value based on current shares
+    zsp_shares = share_quantities['ZSP']
+    prices['zsp_value'] = zsp_shares * zsp_price
+    print(f"[CALC] ZSP: {zsp_shares} shares × ${zsp_price:.2f} = ${prices['zsp_value']:,.2f}")
+
     return prices
 
 def update_portfolio_via_api(nasdaq_value, btcc_value, zsp_value, host='localhost', port=5001):
