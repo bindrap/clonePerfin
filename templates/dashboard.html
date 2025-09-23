@@ -210,7 +210,7 @@ const daysLeft = {{ days_left }};
 // Custom modal functions
 function openBudgetModal() {
     document.getElementById('budgetModalOverlay').style.display = 'block';
-    document.body.style.overflow = 'hidden'; // Prevent scrolling
+    // Allow scrolling - remove the overflow hidden
     
     // Focus on input after a brief delay
     setTimeout(() => {
@@ -224,15 +224,10 @@ function openBudgetModal() {
 
 function closeBudgetModal() {
     document.getElementById('budgetModalOverlay').style.display = 'none';
-    document.body.style.overflow = 'auto'; // Restore scrolling
+    // No need to restore scrolling since we never disabled it
 }
 
-// Close modal when clicking overlay
-document.getElementById('budgetModalOverlay').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeBudgetModal();
-    }
-});
+// Removed click-outside-to-close functionality - only X button closes modal
 
 // Close modal on Escape key
 document.addEventListener('keydown', function(e) {

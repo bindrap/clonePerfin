@@ -165,7 +165,7 @@
 // Custom modal functions (same approach as dashboard)
 function openEditSpendingModal() {
     document.getElementById('editSpendingModalOverlay').style.display = 'block';
-    document.body.style.overflow = 'hidden'; // Prevent scrolling
+    // Allow scrolling - remove the overflow hidden
 
     // Focus on the item input after a brief delay
     setTimeout(() => {
@@ -179,7 +179,7 @@ function openEditSpendingModal() {
 
 function closeEditSpendingModal() {
     document.getElementById('editSpendingModalOverlay').style.display = 'none';
-    document.body.style.overflow = 'auto'; // Restore scrolling
+    // No need to restore scrolling since we never disabled it
 }
 
 function editSpending(entryId) {
@@ -204,17 +204,7 @@ function editSpending(entryId) {
         });
 }
 
-// Close modal when clicking overlay
-document.addEventListener('DOMContentLoaded', function() {
-    const overlay = document.getElementById('editSpendingModalOverlay');
-    if (overlay) {
-        overlay.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeEditSpendingModal();
-            }
-        });
-    }
-});
+// Removed click-outside-to-close functionality - only X button closes modal
 
 // Close modal on Escape key
 document.addEventListener('keydown', function(e) {
