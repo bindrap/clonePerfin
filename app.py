@@ -274,6 +274,8 @@ def save_personal():
     coitus = 1 if request.form.get('coitus') == 'on' else 0
     sauna = 1 if request.form.get('sauna') == 'on' else 0
     supplements = 1 if request.form.get('supplements') == 'on' else 0
+    smoking = 1 if request.form.get('smoking') == 'on' else 0
+    drinking = 1 if request.form.get('drinking') == 'on' else 0
     notes = request.form.get('notes', '')
     
     conn = get_db_connection()
@@ -281,15 +283,105 @@ def save_personal():
     
     cursor.execute('''
         INSERT OR REPLACE INTO personal_log 
-        (date, gym, jiu_jitsu, skateboarding, work, coitus, sauna, supplements, notes, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ''', (date_obj, gym, jiu_jitsu, skateboarding, work, coitus, sauna, supplements, notes))
+        (date, gym, jiu_jitsu, skateboarding, work, coitus, sauna, supplements, smoking, drinking, notes, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ''', (date_obj, gym, jiu_jitsu, skateboarding, work, coitus, sauna, supplements, smoking, drinking, notes))
     
     conn.commit()
     conn.close()
     
     flash('Personal data saved successfully!', 'success')
     return redirect(url_for('personal', date=date_str))
+
+@app.route('/calendar')
+def calendar():
+    from datetime import datetime, timedelta
+    
+    # Get date range from query parameters
+    start_date_param = request.args.get('start_date')
+    end_date_param = request.args.get('end_date')
+    
+    # Default to current month if no parameters
+    today = get_toronto_date()
+    if start_date_param and end_date_param:
+        try:
+            start_date = datetime.strptime(start_date_param, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_param, '%Y-%m-%d').date()
+        except ValueError:
+            start_date = today.replace(day=1)
+            end_date = (start_date + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    else:
+        start_date = today.replace(day=1)
+        end_date = (start_date + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get personal activities data
+    cursor.execute('''
+        SELECT * FROM personal_log 
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date
+    ''', (start_date, end_date))
+    personal_data = {row['date'].strftime('%Y-%m-%d'): dict(row) for row in cursor.fetchall()}
+    
+    # Get spending data
+    cursor.execute('''
+        SELECT date, description, amount FROM spending_log 
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date, id
+    ''', (start_date, end_date))
+    spending_raw = cursor.fetchall()
+    
+    # Group spending by date
+    spending_data = {}
+    for row in spending_raw:
+        date_str = row['date'].strftime('%Y-%m-%d')
+        if date_str not in spending_data:
+            spending_data[date_str] = []
+        spending_data[date_str].append({
+            'description': row['description'],
+            'amount': float(row['amount'])
+        })
+    
+    # Combine data for calendar
+    calendar_data = {}
+    all_dates = set(personal_data.keys()) | set(spending_data.keys())
+    
+    for date_str in all_dates:
+        calendar_data[date_str] = {
+            'has_personal': date_str in personal_data,
+            'has_spending': date_str in spending_data,
+            'personal': personal_data.get(date_str),
+            'spending': spending_data.get(date_str, [])
+        }
+        
+        # Add activity indicators
+        if date_str in personal_data:
+            activities = []
+            personal = personal_data[date_str]
+            if personal.get('gym'): activities.append('gym')
+            if personal.get('jiu_jitsu'): activities.append('jiu-jitsu')
+            if personal.get('skateboarding'): activities.append('skateboarding')
+            if personal.get('work'): activities.append('work')
+            if personal.get('coitus'): activities.append('coitus')
+            if personal.get('sauna'): activities.append('sauna')
+            if personal.get('supplements'): activities.append('supplements')
+            if personal.get('smoking'): activities.append('smoking')
+            if personal.get('drinking'): activities.append('drinking')
+            calendar_data[date_str]['activities'] = activities
+        
+        # Add spending total
+        if date_str in spending_data:
+            total = sum(item['amount'] for item in spending_data[date_str])
+            calendar_data[date_str]['spending_total'] = f"{total:.2f}"
+    
+    conn.close()
+    
+    return render_template('calendar.html',
+                         calendar_data=calendar_data,
+                         start_date=start_date.strftime('%Y-%m-%d'),
+                         end_date=end_date.strftime('%Y-%m-%d'))
 
 @app.route('/spending')
 def spending():

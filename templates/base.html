@@ -42,55 +42,15 @@
                 <img src="/favicon_io/favicon-32x32.png" alt="Perfin" style="height: 32px; width: 32px; margin-right: 10px;">
                 Perfin
             </a>
-            <!-- Desktop Navigation -->
-            <div class="navbar-nav ms-auto d-none d-md-flex">
-                <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
-                   href="{{ url_for('dashboard') }}">
-                    <i class="fas fa-home"></i> Dashboard
-                </a>
-                <a class="nav-link {% if request.endpoint == 'personal' %}active{% endif %}"
-                   href="{{ url_for('personal') }}">
-                    <i class="fas fa-user"></i> Personal
-                </a>
-                <a class="nav-link {% if request.endpoint == 'spending' %}active{% endif %}"
-                   href="{{ url_for('spending') }}">
-                    <i class="fas fa-wallet"></i> Spending
-                </a>
-                <a class="nav-link {% if request.endpoint == 'savings' %}active{% endif %}"
-                    href="{{ url_for('savings') }}">
-                    <i class="fas fa-piggy-bank"></i> Savings
-                </a>
-                <a class="nav-link {% if request.endpoint == 'condo' %}active{% endif %}"
-                   href="{{ url_for('condo') }}">
-                    <i class="fas fa-building"></i> Condo
-                </a>
-                <a class="nav-link {% if request.endpoint == 'analytics' %}active{% endif %}"
-                   href="{{ url_for('analytics') }}">
-                    <i class="fas fa-chart-bar"></i> Analytics
-                </a>
-                <a class="nav-link {% if request.endpoint == 'portfolio' %}active{% endif %}"
-                   href="{{ url_for('portfolio') }}">
-                    <i class="fas fa-chart-pie"></i> Portfolio
-                </a>
-                <button class="btn btn-link nav-link p-0 ms-2" id="wallpaperToggle" onclick="toggleWallpaper()"
-                        title="Change wallpaper" style="border: none; background: none;">
-                    <i class="fas fa-image text-info" id="wallpaperIcon"></i>
-                </button>
-                <button class="btn btn-link nav-link p-0 ms-2" id="coitusToggle" onclick="toggleCoitusVisibility()"
-                        title="Toggle intimate activity visibility" style="border: none; background: none;">
-                    <i class="fas fa-heart text-danger" id="heartIcon"></i>
-                </button>
-            </div>
-
-            <!-- Mobile Navigation -->
-            <div class="d-md-none ms-auto">
+            <!-- Universal Dropdown Navigation -->
+            <div class="ms-auto">
                 <div class="dropdown">
-                    <button class="btn btn-outline-light dropdown-toggle" type="button" id="mobileNavDropdown"
+                    <button class="btn btn-outline-light dropdown-toggle" type="button" id="navDropdown"
                             data-bs-toggle="dropdown" aria-expanded="false"
-                            style="border: 1px solid rgba(255, 255, 255, 0.3); color: rgba(255, 255, 255, 0.95);">
+                            style="border: 1px solid rgba(255, 255, 255, 0.3); color: rgba(255, 255, 255, 0.95); font-size: 0.9rem; padding: 0.375rem 0.75rem;">
                         <i class="fas fa-bars"></i> Menu
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="mobileNavDropdown"
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navDropdown"
                         style="background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.2);">
                         <li><a class="dropdown-item {% if request.endpoint == 'dashboard' %}active{% endif %}"
                                href="{{ url_for('dashboard') }}" style="color: rgba(255, 255, 255, 0.95);">
@@ -99,6 +59,10 @@
                         <li><a class="dropdown-item {% if request.endpoint == 'personal' %}active{% endif %}"
                                href="{{ url_for('personal') }}" style="color: rgba(255, 255, 255, 0.95);">
                             <i class="fas fa-user"></i> Personal
+                        </a></li>
+                        <li><a class="dropdown-item {% if request.endpoint == 'calendar' %}active{% endif %}"
+                               href="{{ url_for('calendar') }}" style="color: rgba(255, 255, 255, 0.95);">
+                            <i class="fas fa-calendar"></i> Calendar
                         </a></li>
                         <li><a class="dropdown-item {% if request.endpoint == 'spending' %}active{% endif %}"
                                href="{{ url_for('spending') }}" style="color: rgba(255, 255, 255, 0.95);">
@@ -125,7 +89,7 @@
                             <i class="fas fa-image text-info"></i> Change Wallpaper
                         </button></li>
                         <li><button class="dropdown-item" onclick="toggleCoitusVisibility()" style="color: rgba(255, 255, 255, 0.95);">
-                            <i class="fas fa-heart text-danger"></i> Toggle Privacy
+                            <i class="fas fa-eye-slash text-danger"></i> Toggle Privacy
                         </button></li>
                     </ul>
                 </div>
@@ -237,6 +201,8 @@
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             z-index: 9999 !important;
             position: relative;
+            padding: 0.25rem 1rem !important;
+            min-height: 50px;
         }
         
         .navbar-brand, .nav-link {
@@ -485,13 +451,13 @@
             z-index: 9999 !important;
         }
 
-        /* Mobile navigation button */
-        #mobileNavDropdown {
+        /* Universal navigation button */
+        #navDropdown {
             z-index: 9999 !important;
         }
 
-        /* Ensure mobile nav container is above other elements */
-        .d-md-none {
+        /* Ensure nav container is above other elements */
+        .ms-auto .dropdown {
             z-index: 9999 !important;
             position: relative;
         }
@@ -551,9 +517,9 @@
             #scrollToTopBtn {
                 bottom: 80px !important;
                 right: 15px !important;
-                width: 50px !important;
-                height: 50px !important;
-                font-size: 18px !important;
+                width: 45px !important;
+                height: 45px !important;
+                font-size: 16px !important;
                 background: rgba(0, 123, 255, 0.9) !important;
                 box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4) !important;
             }
@@ -561,6 +527,16 @@
             #scrollToTopBtn:hover {
                 background: rgba(0, 123, 255, 1) !important;
                 transform: translateY(-2px) scale(1.05) !important;
+            }
+            
+            .navbar {
+                padding: 0.2rem 0.75rem !important;
+                min-height: 45px;
+            }
+            
+            .navbar-brand img {
+                height: 28px !important;
+                width: 28px !important;
             }
         }
     </style>
@@ -572,18 +548,21 @@
             // Find all coitus-related elements more comprehensively
             const coitusElements = [];
             
-            // Find elements with coitus-specific text content (but exclude large containers)
-            const allElements = document.querySelectorAll('span, small, div.col-md-3, div.col-lg-2, div.stat-card, div.activity-toggle, div.badge, label, input[name="coitus"], textarea, button');
+            // Find elements with private content (coitus, smoking, drinking)
+            const allElements = document.querySelectorAll('span, small, div.col-md-3, div.col-lg-2, div.stat-card, div.activity-toggle, div.badge, label, input, textarea, button');
             allElements.forEach(el => {
                 const text = el.textContent || el.innerText || '';
                 const inputName = el.name || '';
-                if ((text.includes('❤️') || text.includes('Coitus') || inputName === 'coitus') && 
+                if ((text.includes('❤️') || text.includes('Coitus') || inputName === 'coitus' ||
+                     text.includes('🚬') || text.includes('Smoking') || inputName === 'smoking' ||
+                     text.includes('🍺') || text.includes('Drinking') || inputName === 'drinking') && 
                     !el.classList.contains('container') && 
                     !el.classList.contains('row') && 
                     !el.id.includes('coitusToggle')) {
                     coitusElements.push(el);
-                    // Also hide parent activity-toggle if it's a coitus input
-                    if (el.closest('.activity-toggle') && (inputName === 'coitus' || text.includes('❤️'))) {
+                    // Also hide parent activity-toggle if it's a private input
+                    if (el.closest('.activity-toggle') && (inputName === 'coitus' || inputName === 'smoking' || inputName === 'drinking' || 
+                        text.includes('❤️') || text.includes('🚬') || text.includes('🍺'))) {
                         coitusElements.push(el.closest('.activity-toggle'));
                     }
                 }
@@ -636,18 +615,21 @@
             // Only look for specific coitus-related elements, not general containers
             const coitusElements = [];
             
-            // Find elements with coitus-specific text content (but exclude large containers)
-            const allElements = document.querySelectorAll('span, small, div.col-md-3, div.col-lg-2, div.stat-card, div.activity-toggle, div.badge, label, input[name="coitus"], textarea, button');
+            // Find elements with private content (coitus, smoking, drinking)
+            const allElements = document.querySelectorAll('span, small, div.col-md-3, div.col-lg-2, div.stat-card, div.activity-toggle, div.badge, label, input, textarea, button');
             allElements.forEach(el => {
                 const text = el.textContent || el.innerText || '';
                 const inputName = el.name || '';
-                if ((text.includes('❤️') || text.includes('Coitus') || inputName === 'coitus') && 
+                if ((text.includes('❤️') || text.includes('Coitus') || inputName === 'coitus' ||
+                     text.includes('🚬') || text.includes('Smoking') || inputName === 'smoking' ||
+                     text.includes('🍺') || text.includes('Drinking') || inputName === 'drinking') && 
                     !el.classList.contains('container') && 
                     !el.classList.contains('row') && 
                     !el.id.includes('coitusToggle')) {
                     coitusElements.push(el);
-                    // Also hide parent activity-toggle if it's a coitus input
-                    if (el.closest('.activity-toggle') && (inputName === 'coitus' || text.includes('❤️'))) {
+                    // Also hide parent activity-toggle if it's a private input
+                    if (el.closest('.activity-toggle') && (inputName === 'coitus' || inputName === 'smoking' || inputName === 'drinking' || 
+                        text.includes('❤️') || text.includes('🚬') || text.includes('🍺'))) {
                         coitusElements.push(el.closest('.activity-toggle'));
                     }
                 }

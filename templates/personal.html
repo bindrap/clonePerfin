@@ -104,6 +104,29 @@
                                 <span class="ms-2">💊 Supplements</span>
                             </div>
                         </div>
+                        <div class="col-md-6">
+                            <div class="activity-toggle">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="smoking" id="smoking"
+                                           {% if today_data and today_data.smoking %}checked{% endif %}>
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="ms-2">🚬 Smoking</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="activity-toggle">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="drinking" id="drinking"
+                                           {% if today_data and today_data.drinking %}checked{% endif %}>
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="ms-2">🍺 Drinking</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -144,6 +167,8 @@
                             {% if entry.coitus %}<span class="badge bg-info me-1">❤️ Coitus</span>{% endif %}
                             {% if entry.sauna %}<span class="badge bg-secondary me-1">🧖‍♂️ Sauna</span>{% endif %}
                             {% if entry.supplements %}<span class="badge bg-dark me-1">💊 Supplements</span>{% endif %}
+                            {% if entry.smoking %}<span class="badge bg-warning me-1">🚬 Smoking</span>{% endif %}
+                            {% if entry.drinking %}<span class="badge bg-info me-1">🍺 Drinking</span>{% endif %}
                         </div>
                         {% if entry.notes %}
                         <div class="mt-1 text-muted small">

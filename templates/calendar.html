@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+
+{% block title %}Calendar - Perfin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-calendar"></i> Calendar View</h1>
+        <p class="text-muted">View your activities and spending by date</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fas fa-search"></i> Date Range</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" id="dateRangeForm">
+                    <div class="mb-3">
+                        <label for="start_date" class="form-label">Start Date</label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" 
+                               value="{{ start_date }}" onchange="updateDateRange()">
+                    </div>
+                    <div class="mb-3">
+                        <label for="end_date" class="form-label">End Date</label>
+                        <input type="date" class="form-control" id="end_date" name="end_date" 
+                               value="{{ end_date }}" onchange="updateDateRange()">
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="setDateRange('week')">This Week</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="setDateRange('month')">This Month</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="setDateRange('year')">This Year</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header bg-info text-white">
+                <h5><i class="fas fa-info-circle"></i> Selected Day Details</h5>
+            </div>
+            <div class="card-body" id="dayDetails">
+                <p class="text-muted">Click on a day in the calendar to see details</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5><i class="fas fa-calendar-alt"></i> Calendar</h5>
+            </div>
+            <div class="card-body">
+                <div id="calendar-container">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <button class="btn btn-outline-primary" onclick="previousMonth()">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </button>
+                        <h4 id="currentMonth"></h4>
+                        <button class="btn btn-outline-primary" onclick="nextMonth()">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    <div id="calendar-grid" class="calendar-grid">
+                        <!-- Calendar will be generated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.calendar-day {
+    background: white;
+    border: 1px solid #dee2e6;
+    padding: 8px;
+    min-height: 80px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-radius: 4px;
+    position: relative;
+}
+
+.calendar-day:hover {
+    background: #e3f2fd;
+    transform: scale(1.02);
+}
+
+.calendar-day.selected {
+    background: #2196f3;
+    color: white;
+}
+
+.calendar-day.other-month {
+    background: #f5f5f5;
+    color: #999;
+}
+
+.calendar-day.today {
+    border: 2px solid #ff9800;
+    font-weight: bold;
+}
+
+.calendar-day.has-data {
+    border-left: 4px solid #4caf50;
+}
+
+.calendar-day.has-spending {
+    border-right: 4px solid #f44336;
+}
+
+.day-number {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.day-activities {
+    font-size: 10px;
+    line-height: 1.2;
+}
+
+.activity-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    margin: 1px;
+}
+
+.activity-dot.gym { background-color: #2196f3; }
+.activity-dot.work { background-color: #4caf50; }
+.activity-dot.jiu-jitsu { background-color: #f44336; }
+.activity-dot.skateboarding { background-color: #ff9800; }
+.activity-dot.coitus { background-color: #e91e63; }
+.activity-dot.sauna { background-color: #795548; }
+.activity-dot.supplements { background-color: #9c27b0; }
+.activity-dot.smoking { background-color: #607d8b; }
+.activity-dot.drinking { background-color: #ff5722; }
+
+.calendar-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 10px;
+}
+
+.calendar-header-day {
+    text-align: center;
+    font-weight: bold;
+    padding: 10px;
+    background: #e9ecef;
+    border-radius: 4px;
+}
+
+.spending-amount {
+    font-size: 10px;
+    color: #f44336;
+    font-weight: bold;
+}
+</style>
+
+<script>
+let currentDate = new Date();
+let selectedDate = null;
+let calendarData = {{ calendar_data|tojsonfilter|safe }};
+
+function updateDateRange() {
+    document.getElementById('dateRangeForm').submit();
+}
+
+function setDateRange(period) {
+    const today = new Date();
+    let startDate, endDate;
+    
+    switch(period) {
+        case 'week':
+            const dayOfWeek = today.getDay();
+            startDate = new Date(today);
+            startDate.setDate(today.getDate() - dayOfWeek);
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+            break;
+        case 'month':
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            break;
+        case 'year':
+            startDate = new Date(today.getFullYear(), 0, 1);
+            endDate = new Date(today.getFullYear(), 11, 31);
+            break;
+    }
+    
+    document.getElementById('start_date').value = startDate.toISOString().split('T')[0];
+    document.getElementById('end_date').value = endDate.toISOString().split('T')[0];
+    updateDateRange();
+}
+
+function previousMonth() {
+    currentDate.setMonth(currentDate.getMonth() - 1);
+    generateCalendar();
+}
+
+function nextMonth() {
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    generateCalendar();
+}
+
+function generateCalendar() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    document.getElementById('currentMonth').textContent = 
+        new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    
+    let calendarHTML = '<div class="calendar-header">';
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    dayNames.forEach(day => {
+        calendarHTML += `<div class="calendar-header-day">${day}</div>`;
+    });
+    calendarHTML += '</div>';
+    
+    const currentDate = new Date(startDate);
+    for (let week = 0; week < 6; week++) {
+        for (let day = 0; day < 7; day++) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            const dayData = calendarData[dateStr] || {};
+            const isCurrentMonth = currentDate.getMonth() === month;
+            const isToday = currentDate.toDateString() === new Date().toDateString();
+            const isSelected = selectedDate && currentDate.toDateString() === selectedDate.toDateString();
+            
+            let classes = 'calendar-day';
+            if (!isCurrentMonth) classes += ' other-month';
+            if (isToday) classes += ' today';
+            if (isSelected) classes += ' selected';
+            if (dayData.has_personal) classes += ' has-data';
+            if (dayData.has_spending) classes += ' has-spending';
+            
+            calendarHTML += `<div class="${classes}" onclick="selectDate('${dateStr}')">`;
+            calendarHTML += `<div class="day-number">${currentDate.getDate()}</div>`;
+            
+            if (dayData.activities) {
+                calendarHTML += '<div class="day-activities">';
+                dayData.activities.forEach(activity => {
+                    calendarHTML += `<span class="activity-dot ${activity}"></span>`;
+                });
+                calendarHTML += '</div>';
+            }
+            
+            if (dayData.spending_total) {
+                calendarHTML += `<div class="spending-amount">$${dayData.spending_total}</div>`;
+            }
+            
+            calendarHTML += '</div>';
+            
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        if (currentDate.getMonth() !== month && currentDate.getMonth() !== (month + 1) % 12) {
+            break;
+        }
+    }
+    
+    document.getElementById('calendar-grid').innerHTML = calendarHTML;
+}
+
+function selectDate(dateStr) {
+    selectedDate = new Date(dateStr);
+    generateCalendar();
+    loadDayDetails(dateStr);
+}
+
+function loadDayDetails(dateStr) {
+    const dayData = calendarData[dateStr];
+    let detailsHTML = `<h6>${new Date(dateStr).toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    })}</h6>`;
+    
+    if (!dayData || (!dayData.personal && !dayData.spending)) {
+        detailsHTML += '<p class="text-muted">No data for this day</p>';
+    } else {
+        if (dayData.personal) {
+            detailsHTML += '<div class="mb-3"><h6 class="text-primary">Personal Activities:</h6>';
+            const activities = [];
+            if (dayData.personal.gym) activities.push('💪 Gym');
+            if (dayData.personal.jiu_jitsu) activities.push('🥋 Jiu Jitsu');
+            if (dayData.personal.skateboarding) activities.push('🛹 Skateboarding');
+            if (dayData.personal.work) activities.push('💼 Work');
+            if (dayData.personal.coitus) activities.push('❤️ Coitus');
+            if (dayData.personal.sauna) activities.push('🧖‍♂️ Sauna');
+            if (dayData.personal.supplements) activities.push('💊 Supplements');
+            if (dayData.personal.smoking) activities.push('🚬 Smoking');
+            if (dayData.personal.drinking) activities.push('🍺 Drinking');
+            
+            if (activities.length > 0) {
+                activities.forEach(activity => {
+                    detailsHTML += `<span class="badge bg-primary me-1 mb-1">${activity}</span>`;
+                });
+            } else {
+                detailsHTML += '<p class="text-muted small">No activities logged</p>';
+            }
+            
+            if (dayData.personal.notes) {
+                detailsHTML += `<div class="mt-2"><small><strong>Notes:</strong> ${dayData.personal.notes}</small></div>`;
+            }
+            detailsHTML += '</div>';
+        }
+        
+        if (dayData.spending && dayData.spending.length > 0) {
+            detailsHTML += '<div><h6 class="text-success">Spending:</h6>';
+            let total = 0;
+            dayData.spending.forEach(expense => {
+                detailsHTML += `<div class="d-flex justify-content-between mb-1">
+                    <small>${expense.description}</small>
+                    <small class="text-success fw-bold">$${expense.amount}</small>
+                </div>`;
+                total += parseFloat(expense.amount);
+            });
+            detailsHTML += `<hr><div class="d-flex justify-content-between">
+                <strong>Total:</strong>
+                <strong class="text-success">$${total.toFixed(2)}</strong>
+            </div></div>`;
+        }
+    }
+    
+    document.getElementById('dayDetails').innerHTML = detailsHTML;
+}
+
+// Initialize calendar on page load
+document.addEventListener('DOMContentLoaded', function() {
+    generateCalendar();
+});
+</script>
+{% endblock %}
