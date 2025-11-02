@@ -11,43 +11,38 @@
 </div>
 
 <div class="row">
-    <div class="col-md-4">
-        <div class="card">
+    <div class="col-12">
+        <div class="card mb-3">
             <div class="card-header bg-primary text-white">
                 <h5><i class="fas fa-search"></i> Date Range</h5>
             </div>
             <div class="card-body">
                 <form method="GET" id="dateRangeForm">
-                    <div class="mb-3">
-                        <label for="start_date" class="form-label">Start Date</label>
-                        <input type="date" class="form-control" id="start_date" name="start_date" 
-                               value="{{ start_date }}" onchange="updateDateRange()">
-                    </div>
-                    <div class="mb-3">
-                        <label for="end_date" class="form-label">End Date</label>
-                        <input type="date" class="form-control" id="end_date" name="end_date" 
-                               value="{{ end_date }}" onchange="updateDateRange()">
-                    </div>
-                    <div class="mb-3">
-                        <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="setDateRange('week')">This Week</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="setDateRange('month')">This Month</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="setDateRange('year')">This Year</button>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="start_date" class="form-label">Start Date</label>
+                            <input type="date" class="form-control" id="start_date" name="start_date" 
+                                   value="{{ start_date }}" onchange="updateDateRange()">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="end_date" class="form-label">End Date</label>
+                            <input type="date" class="form-control" id="end_date" name="end_date" 
+                                   value="{{ end_date }}" onchange="updateDateRange()">
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="setDateRange('week')">This Week</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="setDateRange('month')">This Month</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="setDateRange('year')">This Year</button>
+                        </div>
                     </div>
                 </form>
             </div>
         </div>
-
-        <div class="card mt-3">
-            <div class="card-header bg-info text-white">
-                <h5><i class="fas fa-info-circle"></i> Selected Day Details</h5>
-            </div>
-            <div class="card-body" id="dayDetails">
-                <p class="text-muted">Click on a day in the calendar to see details</p>
-            </div>
-        </div>
     </div>
+</div>
 
-    <div class="col-md-8">
+<div class="row">
+    <div class="col-12">
         <div class="card">
             <div class="card-header bg-success text-white">
                 <h5><i class="fas fa-calendar-alt"></i> Calendar</h5>
@@ -72,6 +67,23 @@
     </div>
 </div>
 
+<!-- Day Details Modal -->
+<div class="modal fade" id="dayDetailsModal" tabindex="-1" aria-labelledby="dayDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px);">
+            <div class="modal-header">
+                <h5 class="modal-title" id="dayDetailsModalLabel">
+                    <i class="fas fa-calendar-day"></i> Day Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="modalDayDetails">
+                <p class="text-muted">Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
 .calendar-grid {
     display: grid;
@@ -80,6 +92,8 @@
     background: #f8f9fa;
     padding: 10px;
     border-radius: 8px;
+    width: 100%;
+    overflow-x: auto;
 }
 
 .calendar-day {
@@ -91,6 +105,52 @@
     transition: all 0.3s ease;
     border-radius: 4px;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .calendar-day {
+        min-height: 60px;
+        padding: 4px;
+    }
+    
+    .day-number {
+        font-size: 14px;
+    }
+    
+    .activity-dot {
+        width: 4px !important;
+        height: 4px !important;
+        margin: 0.5px !important;
+    }
+    
+    .spending-amount {
+        font-size: 8px !important;
+    }
+    
+    .calendar-header-day {
+        padding: 5px !important;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 576px) {
+    .calendar-day {
+        min-height: 50px;
+        padding: 2px;
+    }
+    
+    .day-number {
+        font-size: 12px;
+    }
+    
+    .calendar-grid {
+        padding: 5px;
+        gap: 1px;
+    }
 }
 
 .calendar-day:hover {
@@ -176,6 +236,8 @@ let currentDate = new Date();
 let selectedDate = null;
 let calendarData = {{ calendar_data|tojsonfilter|safe }};
 
+console.log('Calendar data:', calendarData);
+
 function updateDateRange() {
     document.getElementById('dateRangeForm').submit();
 }
@@ -236,14 +298,14 @@ function generateCalendar() {
     });
     calendarHTML += '</div>';
     
-    const currentDate = new Date(startDate);
+    const dayIterator = new Date(startDate);
     for (let week = 0; week < 6; week++) {
         for (let day = 0; day < 7; day++) {
-            const dateStr = currentDate.toISOString().split('T')[0];
+            const dateStr = dayIterator.toISOString().split('T')[0];
             const dayData = calendarData[dateStr] || {};
-            const isCurrentMonth = currentDate.getMonth() === month;
-            const isToday = currentDate.toDateString() === new Date().toDateString();
-            const isSelected = selectedDate && currentDate.toDateString() === selectedDate.toDateString();
+            const isCurrentMonth = dayIterator.getMonth() === month;
+            const isToday = dayIterator.toDateString() === new Date().toDateString();
+            const isSelected = selectedDate && dayIterator.toDateString() === selectedDate.toDateString();
             
             let classes = 'calendar-day';
             if (!isCurrentMonth) classes += ' other-month';
@@ -253,7 +315,7 @@ function generateCalendar() {
             if (dayData.has_spending) classes += ' has-spending';
             
             calendarHTML += `<div class="${classes}" onclick="selectDate('${dateStr}')">`;
-            calendarHTML += `<div class="day-number">${currentDate.getDate()}</div>`;
+            calendarHTML += `<div class="day-number">${dayIterator.getDate()}</div>`;
             
             if (dayData.activities) {
                 calendarHTML += '<div class="day-activities">';
@@ -269,10 +331,10 @@ function generateCalendar() {
             
             calendarHTML += '</div>';
             
-            currentDate.setDate(currentDate.getDate() + 1);
+            dayIterator.setDate(dayIterator.getDate() + 1);
         }
         
-        if (currentDate.getMonth() !== month && currentDate.getMonth() !== (month + 1) % 12) {
+        if (dayIterator.getMonth() !== month && dayIterator.getMonth() !== (month + 1) % 12) {
             break;
         }
     }
@@ -288,6 +350,8 @@ function selectDate(dateStr) {
 
 function loadDayDetails(dateStr) {
     const dayData = calendarData[dateStr];
+    const modal = new bootstrap.Modal(document.getElementById('dayDetailsModal'));
+    
     let detailsHTML = `<h6>${new Date(dateStr).toLocaleDateString('en-US', { 
         weekday: 'long', 
         year: 'numeric', 
@@ -296,10 +360,10 @@ function loadDayDetails(dateStr) {
     })}</h6>`;
     
     if (!dayData || (!dayData.personal && !dayData.spending)) {
-        detailsHTML += '<p class="text-muted">No data for this day</p>';
+        detailsHTML += '<div class="alert alert-info"><i class="fas fa-info-circle"></i> No data recorded for this day</div>';
     } else {
         if (dayData.personal) {
-            detailsHTML += '<div class="mb-3"><h6 class="text-primary">Personal Activities:</h6>';
+            detailsHTML += '<div class="mb-4"><h6 class="text-primary"><i class="fas fa-user"></i> Personal Activities:</h6>';
             const activities = [];
             if (dayData.personal.gym) activities.push('💪 Gym');
             if (dayData.personal.jiu_jitsu) activities.push('🥋 Jiu Jitsu');
@@ -312,37 +376,41 @@ function loadDayDetails(dateStr) {
             if (dayData.personal.drinking) activities.push('🍺 Drinking');
             
             if (activities.length > 0) {
+                detailsHTML += '<div class="mb-2">';
                 activities.forEach(activity => {
                     detailsHTML += `<span class="badge bg-primary me-1 mb-1">${activity}</span>`;
                 });
+                detailsHTML += '</div>';
             } else {
                 detailsHTML += '<p class="text-muted small">No activities logged</p>';
             }
             
             if (dayData.personal.notes) {
-                detailsHTML += `<div class="mt-2"><small><strong>Notes:</strong> ${dayData.personal.notes}</small></div>`;
+                detailsHTML += `<div class="alert alert-light mt-2"><strong>Notes:</strong> ${dayData.personal.notes}</div>`;
             }
             detailsHTML += '</div>';
         }
         
         if (dayData.spending && dayData.spending.length > 0) {
-            detailsHTML += '<div><h6 class="text-success">Spending:</h6>';
+            detailsHTML += '<div><h6 class="text-success"><i class="fas fa-wallet"></i> Spending:</h6>';
             let total = 0;
+            detailsHTML += '<div class="table-responsive"><table class="table table-sm">';
             dayData.spending.forEach(expense => {
-                detailsHTML += `<div class="d-flex justify-content-between mb-1">
-                    <small>${expense.description}</small>
-                    <small class="text-success fw-bold">$${expense.amount}</small>
-                </div>`;
+                detailsHTML += `<tr>
+                    <td>${expense.description}</td>
+                    <td class="text-end text-success fw-bold">$${expense.amount}</td>
+                </tr>`;
                 total += parseFloat(expense.amount);
             });
-            detailsHTML += `<hr><div class="d-flex justify-content-between">
-                <strong>Total:</strong>
-                <strong class="text-success">$${total.toFixed(2)}</strong>
-            </div></div>`;
+            detailsHTML += `<tr class="table-active">
+                <td><strong>Total:</strong></td>
+                <td class="text-end"><strong class="text-success">$${total.toFixed(2)}</strong></td>
+            </tr></table></div></div>`;
         }
     }
     
-    document.getElementById('dayDetails').innerHTML = detailsHTML;
+    document.getElementById('modalDayDetails').innerHTML = detailsHTML;
+    modal.show();
 }
 
 // Initialize calendar on page load

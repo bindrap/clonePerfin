@@ -301,18 +301,34 @@ def calendar():
     start_date_param = request.args.get('start_date')
     end_date_param = request.args.get('end_date')
     
-    # Default to current month if no parameters
+    # Default to extended range that covers full calendar view
     today = get_toronto_date()
     if start_date_param and end_date_param:
         try:
             start_date = datetime.strptime(start_date_param, '%Y-%m-%d').date()
             end_date = datetime.strptime(end_date_param, '%Y-%m-%d').date()
         except ValueError:
-            start_date = today.replace(day=1)
-            end_date = (start_date + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            # Get first day of current month
+            first_of_month = today.replace(day=1)
+            # Go back to start of calendar week (Sunday = 0)
+            days_back = (first_of_month.weekday() + 1) % 7
+            start_date = first_of_month - timedelta(days=days_back)
+            # Get last day of current month
+            last_of_month = (first_of_month + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            # Go forward to end of calendar week (Saturday)
+            days_forward = (6 - last_of_month.weekday()) % 7
+            end_date = last_of_month + timedelta(days=days_forward)
     else:
-        start_date = today.replace(day=1)
-        end_date = (start_date + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        # Get first day of current month
+        first_of_month = today.replace(day=1)
+        # Go back to start of calendar week (Sunday = 0)
+        days_back = (first_of_month.weekday() + 1) % 7
+        start_date = first_of_month - timedelta(days=days_back)
+        # Get last day of current month
+        last_of_month = (first_of_month + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        # Go forward to end of calendar week (Saturday)
+        days_forward = (6 - last_of_month.weekday()) % 7
+        end_date = last_of_month + timedelta(days=days_forward)
     
     conn = get_db_connection()
     cursor = conn.cursor()
