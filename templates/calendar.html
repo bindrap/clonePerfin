@@ -71,20 +71,147 @@
 </div>
 
 <!-- Day Details Modal - Custom Modal like Dashboard -->
-<div id="dayDetailsModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999999;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; min-width: 600px; max-width: 90vw; max-height: 80vh; overflow-y: auto; z-index: 1000000;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
-            <h5 style="margin: 0; color: #333;"><i class="fas fa-calendar-day"></i> Day Details</h5>
-            <button onclick="closeDayDetailsModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+<div id="dayDetailsModalOverlay" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5><i class="fas fa-calendar-day"></i> Day Details</h5>
+            <button onclick="closeDayDetailsModal()" class="modal-close-btn">&times;</button>
         </div>
         
-        <div id="modalDayDetails">
+        <div id="modalDayDetails" class="modal-body">
             <p class="text-muted">Loading...</p>
         </div>
     </div>
 </div>
 
 <style>
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    z-index: 1000000;
+    position: relative;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 30px;
+    border-bottom: 1px solid #dee2e6;
+    background: #f8f9fa;
+    border-radius: 10px 10px 0 0;
+}
+
+.modal-header h5 {
+    margin: 0;
+    color: #333;
+    font-size: 1.25rem;
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #666;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.modal-close-btn:hover {
+    background: #e9ecef;
+    color: #333;
+}
+
+.modal-body {
+    padding: 30px;
+}
+
+/* Mobile Modal Styles */
+@media (max-width: 768px) {
+    .modal-overlay {
+        padding: 10px;
+    }
+    
+    .modal-content {
+        max-height: 95vh;
+        margin: 0;
+    }
+    
+    .modal-header {
+        padding: 15px 20px;
+    }
+    
+    .modal-header h5 {
+        font-size: 1.1rem;
+    }
+    
+    .modal-close-btn {
+        font-size: 24px;
+        width: 35px;
+        height: 35px;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+}
+
+@media (max-width: 576px) {
+    .modal-overlay {
+        padding: 5px;
+    }
+    
+    .modal-content {
+        max-height: 98vh;
+        border-radius: 8px;
+    }
+    
+    .modal-header {
+        padding: 12px 15px;
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .modal-header h5 {
+        font-size: 1rem;
+    }
+    
+    .modal-close-btn {
+        font-size: 22px;
+        width: 32px;
+        height: 32px;
+    }
+    
+    .modal-body {
+        padding: 15px;
+    }
+}
+
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -422,6 +549,14 @@ function openDayDetailsModal() {
 function closeDayDetailsModal() {
     document.getElementById('dayDetailsModalOverlay').style.display = 'none';
 }
+
+// Close modal when clicking on overlay (outside modal content)
+document.addEventListener('click', function(e) {
+    const overlay = document.getElementById('dayDetailsModalOverlay');
+    if (e.target === overlay) {
+        closeDayDetailsModal();
+    }
+});
 
 // Initialize calendar on page load
 document.addEventListener('DOMContentLoaded', function() {
