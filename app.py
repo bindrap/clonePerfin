@@ -218,6 +218,15 @@ def dashboard():
     ''', (thirty_days_ago,))
     top_spending_items = cursor.fetchall()
     
+    # Get last 10 individual purchases
+    cursor.execute('''
+        SELECT item, price, date
+        FROM spending_log
+        ORDER BY date DESC, id DESC
+        LIMIT 10
+    ''')
+    recent_purchases = cursor.fetchall()
+    
     conn.close()
     
     return render_template('dashboard.html',
@@ -229,6 +238,7 @@ def dashboard():
                          activity_stats=activity_stats,
                          activity_percentages=activity_percentages,
                          top_spending_items=top_spending_items,
+                         recent_purchases=recent_purchases,
                          today=today)
 
 @app.route('/personal')
