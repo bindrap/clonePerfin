@@ -58,8 +58,11 @@
                             Next <i class="fas fa-chevron-right"></i>
                         </button>
                     </div>
+                    <div id="calendar-header" class="calendar-header">
+                        <!-- Calendar header will be generated here -->
+                    </div>
                     <div id="calendar-grid" class="calendar-grid">
-                        <!-- Calendar will be generated here -->
+                        <!-- Calendar days will be generated here -->
                     </div>
                 </div>
             </div>
@@ -67,19 +70,16 @@
     </div>
 </div>
 
-<!-- Day Details Modal -->
-<div class="modal fade" id="dayDetailsModal" tabindex="-1" aria-labelledby="dayDetailsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content" style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px);">
-            <div class="modal-header">
-                <h5 class="modal-title" id="dayDetailsModalLabel">
-                    <i class="fas fa-calendar-day"></i> Day Details
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="modalDayDetails">
-                <p class="text-muted">Loading...</p>
-            </div>
+<!-- Day Details Modal - Custom Modal like Dashboard -->
+<div id="dayDetailsModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999999;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; min-width: 600px; max-width: 90vw; max-height: 80vh; overflow-y: auto; z-index: 1000000;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
+            <h5 style="margin: 0; color: #333;"><i class="fas fa-calendar-day"></i> Day Details</h5>
+            <button onclick="closeDayDetailsModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+        </div>
+        
+        <div id="modalDayDetails">
+            <p class="text-muted">Loading...</p>
         </div>
     </div>
 </div>
@@ -291,13 +291,16 @@ function generateCalendar() {
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
     
-    let calendarHTML = '<div class="calendar-header">';
+    // Generate header separately
+    let headerHTML = '';
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     dayNames.forEach(day => {
-        calendarHTML += `<div class="calendar-header-day">${day}</div>`;
+        headerHTML += `<div class="calendar-header-day">${day}</div>`;
     });
-    calendarHTML += '</div>';
+    document.getElementById('calendar-header').innerHTML = headerHTML;
     
+    // Generate calendar days
+    let calendarHTML = '';
     const dayIterator = new Date(startDate);
     for (let week = 0; week < 6; week++) {
         for (let day = 0; day < 7; day++) {
@@ -350,7 +353,6 @@ function selectDate(dateStr) {
 
 function loadDayDetails(dateStr) {
     const dayData = calendarData[dateStr];
-    const modal = new bootstrap.Modal(document.getElementById('dayDetailsModal'));
     
     let detailsHTML = `<h6>${new Date(dateStr).toLocaleDateString('en-US', { 
         weekday: 'long', 
@@ -410,7 +412,15 @@ function loadDayDetails(dateStr) {
     }
     
     document.getElementById('modalDayDetails').innerHTML = detailsHTML;
-    modal.show();
+    openDayDetailsModal();
+}
+
+function openDayDetailsModal() {
+    document.getElementById('dayDetailsModalOverlay').style.display = 'block';
+}
+
+function closeDayDetailsModal() {
+    document.getElementById('dayDetailsModalOverlay').style.display = 'none';
 }
 
 // Initialize calendar on page load

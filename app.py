@@ -632,6 +632,67 @@ def analytics():
     ''', (ninety_days_ago,))
     weekly_trends = cursor.fetchall()
     
+    # Smoking and Drinking Analytics
+    # Get total days tracked and smoking/drinking stats
+    cursor.execute('''
+        SELECT 
+            COUNT(*) as total_days_tracked,
+            SUM(smoking) as total_smoking_days,
+            SUM(drinking) as total_drinking_days
+        FROM personal_log
+    ''')
+    habits_stats = cursor.fetchone()
+    
+    # Calculate percentages
+    total_tracked = habits_stats['total_days_tracked'] if habits_stats['total_days_tracked'] > 0 else 1
+    smoking_percentage = (habits_stats['total_smoking_days'] / total_tracked) * 100 if habits_stats['total_smoking_days'] else 0
+    drinking_percentage = (habits_stats['total_drinking_days'] / total_tracked) * 100 if habits_stats['total_drinking_days'] else 0
+    
+    # Get spending on LCBO (alcohol) and Dispo (cannabis)
+    cursor.execute('''
+        SELECT 
+            SUM(CASE WHEN LOWER(item) LIKE '%lcbo%' OR LOWER(item) LIKE '%alcohol%' 
+                     OR LOWER(item) LIKE '%beer%' OR LOWER(item) LIKE '%wine%' 
+                     OR LOWER(item) LIKE '%liquor%' THEN price ELSE 0 END) as lcbo_spending,
+            SUM(CASE WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%cannabis%' 
+                     OR LOWER(item) LIKE '%weed%' OR LOWER(item) LIKE '%dispensary%' THEN price ELSE 0 END) as dispo_spending
+        FROM spending_log
+        WHERE date >= ?
+    ''', (thirty_days_ago,))
+    substance_spending = cursor.fetchone()
+    
+    # Get recent 30 days smoking/drinking patterns
+    cursor.execute('''
+        SELECT 
+            SUM(smoking) as smoking_days_30,
+            SUM(drinking) as drinking_days_30,
+            COUNT(*) as tracked_days_30
+        FROM personal_log
+        WHERE date >= ?
+    ''', (thirty_days_ago,))
+    recent_habits = cursor.fetchone()
+    
+    # Calculate recent percentages
+    recent_tracked = recent_habits['tracked_days_30'] if recent_habits['tracked_days_30'] > 0 else 1
+    recent_smoking_percentage = (recent_habits['smoking_days_30'] / recent_tracked) * 100 if recent_habits['smoking_days_30'] else 0
+    recent_drinking_percentage = (recent_habits['drinking_days_30'] / recent_tracked) * 100 if recent_habits['drinking_days_30'] else 0
+    
+    # Create habits analytics data
+    habits_analytics = {
+        'total_days_tracked': habits_stats['total_days_tracked'],
+        'total_smoking_days': habits_stats['total_smoking_days'] or 0,
+        'total_drinking_days': habits_stats['total_drinking_days'] or 0,
+        'smoking_percentage': smoking_percentage,
+        'drinking_percentage': drinking_percentage,
+        'recent_smoking_days': recent_habits['smoking_days_30'] or 0,
+        'recent_drinking_days': recent_habits['drinking_days_30'] or 0,
+        'recent_smoking_percentage': recent_smoking_percentage,
+        'recent_drinking_percentage': recent_drinking_percentage,
+        'lcbo_spending_30days': substance_spending['lcbo_spending'] or 0,
+        'dispo_spending_30days': substance_spending['dispo_spending'] or 0,
+        'tracked_days_30': recent_habits['tracked_days_30']
+    }
+    
     conn.close()
     
     return render_template('analytics.html',
@@ -640,7 +701,8 @@ def analytics():
                          quarterly_total=quarterly_total,
                          detailed_categories=detailed_categories,
                          top_items=top_items,
-                         weekly_trends=weekly_trends)
+                         weekly_trends=weekly_trends,
+                         habits_analytics=habits_analytics)
 
 # NEW ROUTES FOR PORTFOLIO
 @app.route('/portfolio')
@@ -1159,7 +1221,9 @@ def api_activity_analytics():
             SUM(work) as work_days,
             SUM(sauna) as sauna_days,
             SUM(supplements) as supp_days,
-            SUM(coitus) as coitus_days
+            SUM(coitus) as coitus_days,
+            SUM(smoking) as smoking_days,
+            SUM(drinking) as drinking_days
         FROM personal_log
     ''')
     stats = cursor.fetchone()
@@ -1175,9 +1239,13 @@ def api_activity_analytics():
         'sauna_days': stats['sauna_days'],
         'supp_days': stats['supp_days'],
         'coitus_days': stats['coitus_days'],
+        'smoking_days': stats['smoking_days'],
+        'drinking_days': stats['drinking_days'],
         'gym_percentage': (stats['gym_days'] / total_days) * 100,
         'jj_percentage': (stats['jj_days'] / total_days) * 100,
         'work_percentage': (stats['work_days'] / total_days) * 100,
+        'smoking_percentage': (stats['smoking_days'] / total_days) * 100,
+        'drinking_percentage': (stats['drinking_days'] / total_days) * 100,
     }
     
     # Weekly activity patterns - now including coitus and supplements
