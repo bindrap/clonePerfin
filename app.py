@@ -327,7 +327,7 @@ def calendar():
     
     # Get spending data
     cursor.execute('''
-        SELECT date, description, amount FROM spending_log 
+        SELECT date, item, price FROM spending_log 
         WHERE date BETWEEN ? AND ?
         ORDER BY date, id
     ''', (start_date, end_date))
@@ -340,8 +340,8 @@ def calendar():
         if date_str not in spending_data:
             spending_data[date_str] = []
         spending_data[date_str].append({
-            'description': row['description'],
-            'amount': float(row['amount'])
+            'description': row['item'],
+            'amount': float(row['price'])
         })
     
     # Combine data for calendar
