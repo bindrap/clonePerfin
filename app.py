@@ -2654,19 +2654,22 @@ SPENDING DATA (Last 30 Days):
                 skateboarding_dates = []
 
                 for row in personal_data:
+                    # Convert date to string for display
+                    date_str = str(row['date'])
                     day_activities = []
+
                     if row['gym']:
                         activity_counts['gym'] += 1
                         day_activities.append('Gym')
-                        gym_dates.append(row['date'])
+                        gym_dates.append(date_str)
                     if row['jiu_jitsu']:
                         activity_counts['jiu_jitsu'] += 1
                         day_activities.append('Jiu Jitsu')
-                        jj_dates.append(row['date'])
+                        jj_dates.append(date_str)
                     if row['skateboarding']:
                         activity_counts['skateboarding'] += 1
                         day_activities.append('Skateboarding')
-                        skateboarding_dates.append(row['date'])
+                        skateboarding_dates.append(date_str)
                     if row['work']:
                         activity_counts['work'] += 1
                         day_activities.append('Work')
@@ -2678,12 +2681,12 @@ SPENDING DATA (Last 30 Days):
                         day_activities.append('Supplements')
 
                     if day_activities:
-                        activity_details.append(f"{row['date']}: {', '.join(day_activities)}")
+                        activity_details.append(f"{date_str}: {', '.join(day_activities)}")
 
                 # Get date range
                 if personal_data:
-                    earliest_date = personal_data[-1]['date']
-                    latest_date = personal_data[0]['date']
+                    earliest_date = str(personal_data[-1]['date'])
+                    latest_date = str(personal_data[0]['date'])
                     total_days = len(personal_data)
 
                     context_parts.append(f"""
