@@ -109,7 +109,7 @@
                     <i class="fas fa-plus"></i> Add New Lease Term (Mid-Year Change)
                 </button>
 
-                <div id="newLeaseForm" style="display: none;" class="mt-3 p-3 border rounded bg-light">
+                <div id="newLeaseForm" style="display: none; background: var(--bg-secondary);" class="mt-3 p-3 border rounded">
                     <h6><i class="fas fa-plus-circle"></i> New Lease Terms</h6>
                     <form method="POST" action="{{ url_for('add_lease_term', year=current_year) }}" class="row g-2">
                         <div class="col-12">
@@ -360,57 +360,55 @@
 
 <!-- Custom Month Edit Modal - Single Reusable Modal -->
 <div id="monthModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999999;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; min-width: 450px; z-index: 1000000;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
-            <h5 style="margin: 0; color: #333;" id="monthModalTitle"><i class="fas fa-edit"></i> Edit Month Data</h5>
-            <button onclick="closeMonthModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-primary); padding: 30px; border-radius: 10px; min-width: 450px; z-index: 1000000; box-shadow: var(--shadow-xl);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px;">
+            <h5 style="margin: 0; color: var(--text-primary);" id="monthModalTitle"><i class="fas fa-edit"></i> Edit Month Data</h5>
+            <button onclick="closeMonthModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary);">&times;</button>
         </div>
-        
+
         <form id="monthForm" method="POST" action="">
             <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Tenant Paid ($)</label>
-                <input type="number" id="tenantPaidInput" name="tenant_paid" 
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Tenant Paid ($)</label>
+                <input type="number" id="tenantPaidInput" name="tenant_paid"
                        step="0.01" min="0" value="0" required
-                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+                       style="width: 100%; padding: 10px; border: 2px solid var(--border-color); border-radius: 5px; font-size: 16px; background: var(--bg-primary); color: var(--text-primary);">
             </div>
-            
+
             <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Enwin Bill ($)</label>
-                <input type="number" id="enwinBillInput" name="enwin_bill" 
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Enwin Bill ($)</label>
+                <input type="number" id="enwinBillInput" name="enwin_bill"
                        step="0.01" min="0" value="0" required
-                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+                       style="width: 100%; padding: 10px; border: 2px solid var(--border-color); border-radius: 5px; font-size: 16px; background: var(--bg-primary); color: var(--text-primary);">
             </div>
-            
+
             <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Enbridge Bill ($)</label>
-                <input type="number" id="enbridgeBillInput" name="enbridge_bill" 
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Enbridge Bill ($)</label>
+                <input type="number" id="enbridgeBillInput" name="enbridge_bill"
                        step="0.01" min="0" value="0" required
-                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+                       style="width: 100%; padding: 10px; border: 2px solid var(--border-color); border-radius: 5px; font-size: 16px; background: var(--bg-primary); color: var(--text-primary);">
             </div>
-            
+
             <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Who Paid Utilities</label>
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Who Paid Utilities</label>
                 <select id="whoPaidUtilitiesSelect" name="who_paid_utilities"
-                        style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+                        style="width: 100%; padding: 10px; border: 2px solid var(--border-color); border-radius: 5px; font-size: 16px; background: var(--bg-primary); color: var(--text-primary);">
                     <option value="Me">Me</option>
                     <option value="Tenant">Tenant</option>
                 </select>
             </div>
-            
-            <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
-                <h6 style="margin: 0 0 10px 0; color: #333;"><i class="fas fa-info-circle"></i> Utility Summary</h6>
-                <p style="margin: 5px 0; color: #333;">
+
+            <div style="background: rgba(79, 70, 229, 0.1); border: 1px solid var(--primary-color); border-radius: 5px; padding: 15px; margin-bottom: 20px;">
+                <h6 style="margin: 0 0 10px 0; color: var(--text-primary);"><i class="fas fa-info-circle"></i> Utility Summary</h6>
+                <p style="margin: 5px 0; color: var(--text-primary);">
                     <strong>Total Utilities: $<span id="totalUtilitiesDisplay">0.00</span></strong>
                 </p>
             </div>
-            
+
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button type="button" onclick="closeMonthModal()" 
-                        style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                <button type="button" onclick="closeMonthModal()" class="btn btn-secondary">
                     Cancel
                 </button>
-                <button type="submit" 
-                        style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                <button type="submit" class="btn btn-primary">
                     <i class="fas fa-save"></i> Save Changes
                 </button>
             </div>
@@ -501,12 +499,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <style>
 .lease-term-block {
-    background: #f8f9fa;
-    transition: box-shadow 0.2s;
+    background: var(--bg-secondary);
+    transition: box-shadow var(--transition-fast);
 }
 
 .lease-term-block:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-md);
 }
 
 .lease-term-block .table td {
