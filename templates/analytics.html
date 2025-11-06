@@ -95,7 +95,7 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header bg-dark text-white">
-                <h5><i class="fas fa-smoking"></i> Smoking & Drinking Habits Analytics</h5>
+                <h5><i class="fas fa-dumbbell"></i> Personal Activities Analytics</h5>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -105,37 +105,65 @@
                         <div class="row">
                             <div class="col-6">
                                 <div class="analytics-metric">
-                                    <h4 class="text-warning">{{ habits_analytics.total_smoking_days }}</h4>
-                                    <small>Days Smoked</small>
-                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.smoking_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
+                                    <h4 class="text-primary">{{ habits_analytics.total_gym_days }}</h4>
+                                    <small>💪 Gym Sessions</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.gym_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="analytics-metric">
-                                    <h4 class="text-info">{{ habits_analytics.total_drinking_days }}</h4>
-                                    <small>Days Drank</small>
-                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.drinking_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
+                                    <h4 class="text-success">{{ habits_analytics.total_jj_days }}</h4>
+                                    <small>🥋 Jiu Jitsu</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.jj_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
+                                </div>
+                            </div>
+                            <div class="col-6 mt-3">
+                                <div class="analytics-metric">
+                                    <h4 class="text-warning">{{ habits_analytics.total_skate_days }}</h4>
+                                    <small>🛹 Skateboarding</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.skate_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
+                                </div>
+                            </div>
+                            <div class="col-6 mt-3">
+                                <div class="analytics-metric">
+                                    <h4 class="text-info">{{ habits_analytics.total_supplement_days }}</h4>
+                                    <small>💊 Supplements</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.supplement_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Recent 30 Days -->
                     <div class="col-md-6 mb-4">
                         <h6 class="text-success"><i class="fas fa-calendar-month"></i> Last 30 Days</h6>
                         <div class="row">
                             <div class="col-6">
                                 <div class="analytics-metric">
-                                    <h4 class="text-warning">{{ habits_analytics.recent_smoking_days }}</h4>
-                                    <small>Days Smoked</small>
-                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_smoking_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
+                                    <h4 class="text-primary">{{ habits_analytics.recent_gym_days }}</h4>
+                                    <small>💪 Gym Sessions</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_gym_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="analytics-metric">
-                                    <h4 class="text-info">{{ habits_analytics.recent_drinking_days }}</h4>
-                                    <small>Days Drank</small>
-                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_drinking_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
+                                    <h4 class="text-success">{{ habits_analytics.recent_jj_days }}</h4>
+                                    <small>🥋 Jiu Jitsu</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_jj_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
+                                </div>
+                            </div>
+                            <div class="col-6 mt-3">
+                                <div class="analytics-metric">
+                                    <h4 class="text-warning">{{ habits_analytics.recent_skate_days }}</h4>
+                                    <small>🛹 Skateboarding</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_skate_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
+                                </div>
+                            </div>
+                            <div class="col-6 mt-3">
+                                <div class="analytics-metric">
+                                    <h4 class="text-info">{{ habits_analytics.recent_supplement_days }}</h4>
+                                    <small>💊 Supplements</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_supplement_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
                                 </div>
                             </div>
                         </div>
@@ -148,7 +176,7 @@
                         <h6 class="text-danger"><i class="fas fa-dollar-sign"></i> Substance Spending (Last 30 Days)</h6>
                         <div class="row">
                             <div class="col-md-6">
-                                <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                                <div class="d-flex justify-content-between align-items-center p-3 rounded" style="background: var(--bg-secondary);">
                                     <div>
                                         <span class="fw-bold">🍺 LCBO/Alcohol</span>
                                         <small class="text-muted d-block">Liquor, beer, wine purchases</small>
@@ -157,7 +185,7 @@
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                                <div class="d-flex justify-content-between align-items-center p-3 rounded" style="background: var(--bg-secondary);">
                                     <div>
                                         <span class="fw-bold">🌿 Dispensary/Cannabis</span>
                                         <small class="text-muted d-block">Cannabis, dispo purchases</small>
@@ -226,8 +254,8 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <div class="card border-light">
-                            <div class="card-header bg-light">
+                        <div class="card">
+                            <div class="card-header" style="background: var(--bg-secondary);">
                                 <h6><i class="fas fa-chart-pie"></i> Activity Frequency</h6>
                             </div>
                             <div class="card-body">
@@ -236,8 +264,8 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="card border-light">
-                            <div class="card-header bg-light">
+                        <div class="card">
+                            <div class="card-header" style="background: var(--bg-secondary);">
                                 <h6><i class="fas fa-calendar-check"></i> Weekly Activity Patterns</h6>
                             </div>
                             <div class="card-body">
@@ -246,11 +274,11 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="row mt-4">
                     <div class="col-12">
-                        <div class="card border-light">
-                            <div class="card-header bg-light">
+                        <div class="card">
+                            <div class="card-header" style="background: var(--bg-secondary);">
                                 <h6><i class="fas fa-trophy"></i> Activity Streaks & Insights</h6>
                             </div>
                             <div class="card-body" id="activityInsights">
@@ -309,10 +337,10 @@
 
 <!-- Other Category Modal -->
 <div id="otherCategoryModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999999;">
-    <div id="otherCategoryModal" style="position: absolute; top: 20%; left: 50%; transform: translate(-50%, 0); background: white; padding: 30px; border-radius: 10px; min-width: 400px; max-width: 90vw; z-index: 1000000;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
-            <h5 style="margin: 0; color: #333;"><i class="fas fa-tags"></i> "Other" Category Breakdown</h5>
-            <button onclick="closeOtherCategoryModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+    <div id="otherCategoryModal" style="position: absolute; top: 20%; left: 50%; transform: translate(-50%, 0); background: var(--bg-primary); padding: 30px; border-radius: 10px; min-width: 400px; max-width: 90vw; z-index: 1000000; box-shadow: var(--shadow-xl);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px;">
+            <h5 style="margin: 0; color: var(--text-primary);"><i class="fas fa-tags"></i> "Other" Category Breakdown</h5>
+            <button onclick="closeOtherCategoryModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary);">&times;</button>
         </div>
 
         <div id="otherCategoryContent">
@@ -322,13 +350,25 @@
         </div>
 
         <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-            <button type="button" onclick="closeOtherCategoryModal()"
-                    style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            <button type="button" onclick="closeOtherCategoryModal()" class="btn btn-secondary">
                 Close
             </button>
         </div>
     </div>
 </div>
+
+<style>
+.other-item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    margin: 5px 0;
+    background: var(--bg-secondary);
+    border-radius: 5px;
+}
+</style>
+
 {% endblock %}
 
 {% block scripts %}
@@ -376,12 +416,12 @@ function showOtherCategoryModal(event) {
 
                 data.items.forEach((item, index) => {
                     html += `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; margin: 5px 0; background: #f8f9fa; border-radius: 5px;">
+                        <div class="other-item-row">
                             <div>
                                 <span style="font-weight: bold;">${item.item}</span>
-                                <small style="color: #666; display: block;">${item.frequency}x purchases</small>
+                                <small class="text-muted" style="display: block;">${item.frequency}x purchases</small>
                             </div>
-                            <span style="background: #6c757d; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">$${item.total.toFixed(2)}</span>
+                            <span class="badge bg-secondary">$${item.total.toFixed(2)}</span>
                         </div>
                     `;
                 });
@@ -390,7 +430,7 @@ function showOtherCategoryModal(event) {
                 content.innerHTML = html;
             } else {
                 content.innerHTML = `
-                    <div style="text-align: center; color: #666;">
+                    <div class="text-center text-muted">
                         <i class="fas fa-inbox"></i>
                         <p>No items found in "Other" category</p>
                     </div>

@@ -7,12 +7,18 @@ import pytz
 from functools import wraps
 import subprocess
 import threading
+from ollama import Client
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 
 # Toronto timezone
 TORONTO_TZ = pytz.timezone('America/Toronto')
+
+# Ollama Configuration
+OLLAMA_API_KEY = '1728cbe73f944db7afa1a3c8f52d2f41.GzEVZ8ADdcDHwIxdbvKnqbXy'
+OLLAMA_HOST = 'https://ollama.com'
+OLLAMA_MODEL = 'gpt-oss:120b'
 
 def get_toronto_date():
     """Get current date in Toronto timezone"""
@@ -47,9 +53,27 @@ def to_json_filter(value):
         return json.dumps(str(value))
 
 def get_db_connection():
-    conn = sqlite3.connect('finance_tracker.db', detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect('finance_tracker.db')
     conn.row_factory = sqlite3.Row
     return conn
+
+def convert_row_dates(row, date_fields):
+    """Convert date string fields to datetime objects in a sqlite3.Row"""
+    if not row:
+        return row
+    row_dict = dict(row)
+    for field in date_fields:
+        if field in row_dict and row_dict[field]:
+            try:
+                # Try date format first (YYYY-MM-DD)
+                row_dict[field] = datetime.strptime(row_dict[field], '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    # Try datetime format (YYYY-MM-DD HH:MM:SS)
+                    row_dict[field] = datetime.strptime(row_dict[field], '%Y-%m-%d %H:%M:%S')
+                except (ValueError, TypeError):
+                    pass  # Keep original value if conversion fails
+    return type('obj', (object,), row_dict)
 
 def determine_pay_period_type(start_date, end_date):
     """
@@ -225,10 +249,14 @@ def dashboard():
         ORDER BY date DESC, id DESC
         LIMIT 10
     ''')
-    recent_purchases = cursor.fetchall()
-    
+    recent_purchases_raw = cursor.fetchall()
+    recent_purchases = [convert_row_dates(row, ['date']) for row in recent_purchases_raw]
+
+    # Convert top_spending_items dates as well
+    top_spending_items_converted = [convert_row_dates(row, ['last_purchase']) for row in top_spending_items]
+
     conn.close()
-    
+
     return render_template('dashboard.html',
                          budget_period=budget_period,
                          total_spent=total_spent,
@@ -237,7 +265,7 @@ def dashboard():
                          daily_spend_limit=daily_spend_limit,
                          activity_stats=activity_stats,
                          activity_percentages=activity_percentages,
-                         top_spending_items=top_spending_items,
+                         top_spending_items=top_spending_items_converted,
                          recent_purchases=recent_purchases,
                          today=today)
 
@@ -349,7 +377,15 @@ def calendar():
         WHERE date BETWEEN ? AND ?
         ORDER BY date
     ''', (start_date, end_date))
-    personal_data = {row['date'].strftime('%Y-%m-%d'): dict(row) for row in cursor.fetchall()}
+    personal_rows = cursor.fetchall()
+    personal_data = {}
+    for row in personal_rows:
+        # Handle both string and datetime objects
+        if isinstance(row['date'], str):
+            date_key = row['date']
+        else:
+            date_key = row['date'].strftime('%Y-%m-%d')
+        personal_data[date_key] = dict(row)
     
     # Get spending data
     cursor.execute('''
@@ -362,7 +398,11 @@ def calendar():
     # Group spending by date
     spending_data = {}
     for row in spending_raw:
-        date_str = row['date'].strftime('%Y-%m-%d')
+        # Handle both string and datetime objects
+        if isinstance(row['date'], str):
+            date_str = row['date']
+        else:
+            date_str = row['date'].strftime('%Y-%m-%d')
         if date_str not in spending_data:
             spending_data[date_str] = []
         spending_data[date_str].append({
@@ -417,36 +457,38 @@ def spending():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT * FROM spending_log 
-        WHERE date = ? 
+        SELECT * FROM spending_log
+        WHERE date = ?
         ORDER BY created_at DESC
     ''', (toronto_today,))
-    today_spending = cursor.fetchall()
-    
+    today_spending_raw = cursor.fetchall()
+    today_spending = [convert_row_dates(row, ['date', 'created_at']) for row in today_spending_raw]
+
     cursor.execute('''
-        SELECT * FROM spending_log 
+        SELECT * FROM spending_log
         WHERE date BETWEEN ? AND ?
         ORDER BY date DESC, created_at DESC
     ''', (budget_period['start_date'], budget_period['end_date']))
-    period_spending = cursor.fetchall()
-    
+    period_spending_raw = cursor.fetchall()
+    period_spending = [convert_row_dates(row, ['date', 'created_at']) for row in period_spending_raw]
+
     cursor.execute('''
-        SELECT SUM(price) as total 
-        FROM spending_log 
+        SELECT SUM(price) as total
+        FROM spending_log
         WHERE date = ?
     ''', (toronto_today,))
     today_total = cursor.fetchone()['total'] or 0
-    
+
     cursor.execute('''
-        SELECT SUM(price) as total 
-        FROM spending_log 
+        SELECT SUM(price) as total
+        FROM spending_log
         WHERE date BETWEEN ? AND ?
     ''', (budget_period['start_date'], budget_period['end_date']))
     period_total = cursor.fetchone()['total'] or 0
-    
+
     conn.close()
-    
-    return render_template('spending.html', 
+
+    return render_template('spending.html',
                          budget_period=budget_period,
                          today_spending=today_spending,
                          period_spending=period_spending,
@@ -509,7 +551,7 @@ def edit_spending(entry_id):
 
         return jsonify({
             'id': entry['id'],
-            'date': entry['date'].strftime('%Y-%m-%d') if entry['date'] else '',
+            'date': entry['date'].strftime('%Y-%m-%d') if entry['date'] and hasattr(entry['date'], 'strftime') else str(entry['date']) if entry['date'] else '',
             'item': entry['item'],
             'price': float(entry['price'])
         })
@@ -632,62 +674,78 @@ def analytics():
     ''', (ninety_days_ago,))
     weekly_trends = cursor.fetchall()
     
-    # Smoking and Drinking Analytics
-    # Get total days tracked and smoking/drinking stats
+    # Personal Activities Analytics
+    # Get total days tracked and activity stats
     cursor.execute('''
-        SELECT 
+        SELECT
             COUNT(*) as total_days_tracked,
-            SUM(smoking) as total_smoking_days,
-            SUM(drinking) as total_drinking_days
+            SUM(gym) as total_gym_days,
+            SUM(jiu_jitsu) as total_jj_days,
+            SUM(skateboarding) as total_skate_days,
+            SUM(supplements) as total_supplement_days
         FROM personal_log
     ''')
     habits_stats = cursor.fetchone()
-    
+
     # Calculate percentages
     total_tracked = habits_stats['total_days_tracked'] if habits_stats['total_days_tracked'] > 0 else 1
-    smoking_percentage = (habits_stats['total_smoking_days'] / total_tracked) * 100 if habits_stats['total_smoking_days'] else 0
-    drinking_percentage = (habits_stats['total_drinking_days'] / total_tracked) * 100 if habits_stats['total_drinking_days'] else 0
-    
+    gym_percentage = (habits_stats['total_gym_days'] / total_tracked) * 100 if habits_stats['total_gym_days'] else 0
+    jj_percentage = (habits_stats['total_jj_days'] / total_tracked) * 100 if habits_stats['total_jj_days'] else 0
+    skate_percentage = (habits_stats['total_skate_days'] / total_tracked) * 100 if habits_stats['total_skate_days'] else 0
+    supplement_percentage = (habits_stats['total_supplement_days'] / total_tracked) * 100 if habits_stats['total_supplement_days'] else 0
+
     # Get spending on LCBO (alcohol) and Dispo (cannabis)
     cursor.execute('''
-        SELECT 
-            SUM(CASE WHEN LOWER(item) LIKE '%lcbo%' OR LOWER(item) LIKE '%alcohol%' 
-                     OR LOWER(item) LIKE '%beer%' OR LOWER(item) LIKE '%wine%' 
+        SELECT
+            SUM(CASE WHEN LOWER(item) LIKE '%lcbo%' OR LOWER(item) LIKE '%alcohol%'
+                     OR LOWER(item) LIKE '%beer%' OR LOWER(item) LIKE '%wine%'
                      OR LOWER(item) LIKE '%liquor%' THEN price ELSE 0 END) as lcbo_spending,
-            SUM(CASE WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%cannabis%' 
+            SUM(CASE WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%cannabis%'
                      OR LOWER(item) LIKE '%weed%' OR LOWER(item) LIKE '%dispensary%' THEN price ELSE 0 END) as dispo_spending
         FROM spending_log
         WHERE date >= ?
     ''', (thirty_days_ago,))
     substance_spending = cursor.fetchone()
-    
-    # Get recent 30 days smoking/drinking patterns
+
+    # Get recent 30 days activity patterns
     cursor.execute('''
-        SELECT 
-            SUM(smoking) as smoking_days_30,
-            SUM(drinking) as drinking_days_30,
+        SELECT
+            SUM(gym) as gym_days_30,
+            SUM(jiu_jitsu) as jj_days_30,
+            SUM(skateboarding) as skate_days_30,
+            SUM(supplements) as supplement_days_30,
             COUNT(*) as tracked_days_30
         FROM personal_log
         WHERE date >= ?
     ''', (thirty_days_ago,))
     recent_habits = cursor.fetchone()
-    
+
     # Calculate recent percentages
     recent_tracked = recent_habits['tracked_days_30'] if recent_habits['tracked_days_30'] > 0 else 1
-    recent_smoking_percentage = (recent_habits['smoking_days_30'] / recent_tracked) * 100 if recent_habits['smoking_days_30'] else 0
-    recent_drinking_percentage = (recent_habits['drinking_days_30'] / recent_tracked) * 100 if recent_habits['drinking_days_30'] else 0
-    
+    recent_gym_percentage = (recent_habits['gym_days_30'] / recent_tracked) * 100 if recent_habits['gym_days_30'] else 0
+    recent_jj_percentage = (recent_habits['jj_days_30'] / recent_tracked) * 100 if recent_habits['jj_days_30'] else 0
+    recent_skate_percentage = (recent_habits['skate_days_30'] / recent_tracked) * 100 if recent_habits['skate_days_30'] else 0
+    recent_supplement_percentage = (recent_habits['supplement_days_30'] / recent_tracked) * 100 if recent_habits['supplement_days_30'] else 0
+
     # Create habits analytics data
     habits_analytics = {
         'total_days_tracked': habits_stats['total_days_tracked'],
-        'total_smoking_days': habits_stats['total_smoking_days'] or 0,
-        'total_drinking_days': habits_stats['total_drinking_days'] or 0,
-        'smoking_percentage': smoking_percentage,
-        'drinking_percentage': drinking_percentage,
-        'recent_smoking_days': recent_habits['smoking_days_30'] or 0,
-        'recent_drinking_days': recent_habits['drinking_days_30'] or 0,
-        'recent_smoking_percentage': recent_smoking_percentage,
-        'recent_drinking_percentage': recent_drinking_percentage,
+        'total_gym_days': habits_stats['total_gym_days'] or 0,
+        'total_jj_days': habits_stats['total_jj_days'] or 0,
+        'total_skate_days': habits_stats['total_skate_days'] or 0,
+        'total_supplement_days': habits_stats['total_supplement_days'] or 0,
+        'gym_percentage': gym_percentage,
+        'jj_percentage': jj_percentage,
+        'skate_percentage': skate_percentage,
+        'supplement_percentage': supplement_percentage,
+        'recent_gym_days': recent_habits['gym_days_30'] or 0,
+        'recent_jj_days': recent_habits['jj_days_30'] or 0,
+        'recent_skate_days': recent_habits['skate_days_30'] or 0,
+        'recent_supplement_days': recent_habits['supplement_days_30'] or 0,
+        'recent_gym_percentage': recent_gym_percentage,
+        'recent_jj_percentage': recent_jj_percentage,
+        'recent_skate_percentage': recent_skate_percentage,
+        'recent_supplement_percentage': recent_supplement_percentage,
         'lcbo_spending_30days': substance_spending['lcbo_spending'] or 0,
         'dispo_spending_30days': substance_spending['dispo_spending'] or 0,
         'tracked_days_30': recent_habits['tracked_days_30']
@@ -1060,7 +1118,7 @@ def api_analytics():
     daily_activities = []
     for row in activities:
         activity_dict = dict(row)
-        activity_dict['date'] = activity_dict['date'].strftime('%Y-%m-%d') if activity_dict['date'] else ''
+        activity_dict['date'] = activity_dict['date'].strftime('%Y-%m-%d') if activity_dict['date'] and hasattr(activity_dict['date'], 'strftime') else str(activity_dict['date']) if activity_dict['date'] else ''
         daily_activities.append(activity_dict)
     
     # Get current budget info
@@ -1863,7 +1921,8 @@ def savings():
         ORDER BY created_at DESC
         LIMIT 5
     ''')
-    recent_calculations = cursor.fetchall()
+    recent_calculations_raw = cursor.fetchall()
+    recent_calculations = [convert_row_dates(row, ['created_at']) for row in recent_calculations_raw]
 
     conn.close()
 
@@ -2151,100 +2210,193 @@ def override_pay_period():
 
 # CONDO MANAGEMENT ROUTES
 @app.route('/condo')
-def condo():
-    """Condo property management page"""
+@app.route('/condo/<int:year>')
+def condo(year=None):
+    """Condo property management page with mid-year lease term support"""
+    from datetime import date
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Get current condo configuration
-    cursor.execute('SELECT * FROM condo_config ORDER BY id DESC LIMIT 1')
-    config = cursor.fetchone()
-    
-    if not config:
-        # Create default configuration
-        cursor.execute('''
-            INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount)
-            VALUES (1375.99, 427.35, 406.00, 2000.00)
-        ''')
-        conn.commit()
-        cursor.execute('SELECT * FROM condo_config ORDER BY id DESC LIMIT 1')
-        config = cursor.fetchone()
-    
-    # Calculate total expenses
-    total_expenses = float(config['mortgage']) + float(config['condo_fee']) + float(config['property_tax'])
-    revenue = float(config['rent_amount']) - total_expenses
-    yearly_revenue = revenue * 12
-    
-    # Get monthly tracking data for current year
-    current_year = get_toronto_date().year
+
+    # Default to current year if not specified
+    if year is None:
+        year = get_toronto_date().year
+
+    # Get ALL condo configurations for the specified year (can have multiple per year now)
     cursor.execute('''
-        SELECT * FROM condo_monthly_tracking 
-        WHERE year = ? 
+        SELECT * FROM condo_config
+        WHERE year = ?
+        ORDER BY effective_date
+    ''', (year,))
+    all_configs = cursor.fetchall()
+
+    if not all_configs:
+        # Get the most recent config as template
+        cursor.execute('SELECT * FROM condo_config ORDER BY year DESC, effective_date DESC LIMIT 1')
+        latest_config = cursor.fetchone()
+
+        if latest_config:
+            # Create new config for this year based on latest
+            cursor.execute('''
+                INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount, year, effective_date)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (latest_config['mortgage'], latest_config['condo_fee'],
+                  latest_config['property_tax'], latest_config['rent_amount'], year, f'{year}-01-01'))
+        else:
+            # Create default configuration
+            cursor.execute('''
+                INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount, year, effective_date)
+                VALUES (1375.99, 427.35, 203.98, 2000.00, ?, ?)
+            ''', (year, f'{year}-01-01'))
+        conn.commit()
+        cursor.execute('SELECT * FROM condo_config WHERE year = ? ORDER BY effective_date', (year,))
+        all_configs = cursor.fetchall()
+
+    # Function to get active config for a specific month
+    def get_config_for_month(month_num):
+        """Return the config that's active for a given month"""
+        target_date = date(year, month_num, 1)
+        active_config = all_configs[0]  # Default to first
+        for cfg in all_configs:
+            cfg_date = datetime.strptime(cfg['effective_date'], '%Y-%m-%d').date()
+            if cfg_date <= target_date:
+                active_config = cfg
+            else:
+                break
+        return active_config
+
+    # Calculate yearly revenue based on which config applies to each month
+    yearly_revenue = 0
+    for month in range(1, 13):
+        cfg = get_config_for_month(month)
+        month_expenses = float(cfg['mortgage']) + float(cfg['condo_fee']) + float(cfg['property_tax'])
+        month_revenue = float(cfg['rent_amount']) - month_expenses
+        yearly_revenue += month_revenue
+
+    # Use the most recent config for display in the overview card
+    current_config = all_configs[-1]
+    total_expenses = float(current_config['mortgage']) + float(current_config['condo_fee']) + float(current_config['property_tax'])
+    revenue = float(current_config['rent_amount']) - total_expenses
+
+    # Get monthly tracking data for specified year
+    cursor.execute('''
+        SELECT * FROM condo_monthly_tracking
+        WHERE year = ?
         ORDER BY month
-    ''', (current_year,))
+    ''', (year,))
     monthly_data = cursor.fetchall()
-    
+
     # Get property tax schedule
     cursor.execute('''
-        SELECT * FROM property_tax_schedule 
-        WHERE year = ? 
+        SELECT * FROM property_tax_schedule
+        WHERE year = ?
         ORDER BY installment_number
-    ''', (current_year,))
+    ''', (year,))
     property_tax_data = cursor.fetchall()
-    
+
     # Calculate property tax totals
     cursor.execute('''
-        SELECT 
+        SELECT
             SUM(amount) as total_amount,
             COUNT(CASE WHEN paid = 1 THEN 1 END) as paid_count,
             COUNT(*) as total_count
-        FROM property_tax_schedule 
+        FROM property_tax_schedule
         WHERE year = ?
-    ''', (current_year,))
+    ''', (year,))
     tax_summary = cursor.fetchone()
-    
+
+    # Get list of available years for navigation
+    cursor.execute('SELECT DISTINCT year FROM condo_config ORDER BY year')
+    available_years = [row['year'] for row in cursor.fetchall()]
+
     conn.close()
-    
+
     return render_template('condo.html',
-                         config=config,
+                         config=current_config,
+                         all_configs=all_configs,
                          total_expenses=total_expenses,
                          revenue=revenue,
                          yearly_revenue=yearly_revenue,
                          monthly_data=monthly_data,
                          property_tax_data=property_tax_data,
                          tax_summary=tax_summary,
-                         current_year=current_year,
+                         current_year=year,
+                         available_years=available_years,
                          today=get_toronto_date())
 
-@app.route('/condo/update_config', methods=['POST'])
-def update_condo_config():
-    """Update condo configuration"""
+@app.route('/condo/update_config/<int:config_id>', methods=['POST'])
+def update_condo_config(config_id):
+    """Update an existing condo configuration"""
     try:
         mortgage = float(request.form.get('mortgage', 0))
         condo_fee = float(request.form.get('condo_fee', 0))
         property_tax = float(request.form.get('property_tax', 0))
         rent_amount = float(request.form.get('rent_amount', 0))
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
+        # Get the year of this config for redirect
+        cursor.execute('SELECT year FROM condo_config WHERE id = ?', (config_id,))
+        result = cursor.fetchone()
+        year = result['year'] if result else get_toronto_date().year
+
+        # Update existing config
         cursor.execute('''
-            INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount)
-            VALUES (?, ?, ?, ?)
-        ''', (mortgage, condo_fee, property_tax, rent_amount))
-        
+            UPDATE condo_config
+            SET mortgage = ?, condo_fee = ?, property_tax = ?, rent_amount = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (mortgage, condo_fee, property_tax, rent_amount, config_id))
+
         conn.commit()
         conn.close()
-        
-        flash('Condo configuration updated successfully!', 'success')
-        return redirect(url_for('condo'))
-        
+
+        flash('Lease terms updated successfully!', 'success')
+        return redirect(url_for('condo', year=year))
+
     except ValueError:
         flash('Please enter valid numeric values', 'error')
         return redirect(url_for('condo'))
     except Exception as e:
         flash(f'Error updating configuration: {str(e)}', 'error')
         return redirect(url_for('condo'))
+
+@app.route('/condo/<int:year>/add_lease_term', methods=['POST'])
+def add_lease_term(year):
+    """Add a new lease term starting at a specific month"""
+    try:
+        mortgage = float(request.form.get('mortgage', 0))
+        condo_fee = float(request.form.get('condo_fee', 0))
+        property_tax = float(request.form.get('property_tax', 0))
+        rent_amount = float(request.form.get('rent_amount', 0))
+        start_month = int(request.form.get('start_month', 1))
+
+        # Create effective date (first day of the specified month)
+        effective_date = f'{year}-{start_month:02d}-01'
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Insert new configuration
+        cursor.execute('''
+            INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount, year, effective_date)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (mortgage, condo_fee, property_tax, rent_amount, year, effective_date))
+
+        conn.commit()
+        conn.close()
+
+        month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                      'July', 'August', 'September', 'October', 'November', 'December']
+        flash(f'New lease terms added starting {month_names[start_month]} {year}!', 'success')
+        return redirect(url_for('condo', year=year))
+
+    except ValueError:
+        flash('Please enter valid numeric values', 'error')
+        return redirect(url_for('condo', year=year))
+    except Exception as e:
+        flash(f'Error adding lease term: {str(e)}', 'error')
+        return redirect(url_for('condo', year=year))
 
 @app.route('/condo/update_monthly/<int:year>/<int:month>', methods=['POST'])
 def update_monthly_data(year, month):
@@ -2268,14 +2420,14 @@ def update_monthly_data(year, month):
         conn.close()
         
         flash(f'Updated data for {year}-{month:02d}', 'success')
-        return redirect(url_for('condo'))
-        
+        return redirect(url_for('condo', year=year))
+
     except ValueError:
         flash('Please enter valid numeric values', 'error')
-        return redirect(url_for('condo'))
+        return redirect(url_for('condo', year=year))
     except Exception as e:
         flash(f'Error updating monthly data: {str(e)}', 'error')
-        return redirect(url_for('condo'))
+        return redirect(url_for('condo', year=year))
 
 @app.route('/condo/toggle_tenant_payment/<int:year>/<int:month>', methods=['POST'])
 def toggle_tenant_payment(year, month):
@@ -2284,8 +2436,8 @@ def toggle_tenant_payment(year, month):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Get current rent amount from config
-        cursor.execute('SELECT rent_amount FROM condo_config ORDER BY id DESC LIMIT 1')
+        # Get current rent amount from config for this year
+        cursor.execute('SELECT rent_amount FROM condo_config WHERE year = ?', (year,))
         config = cursor.fetchone()
         rent_amount = float(config['rent_amount']) if config else 2000.00
         
@@ -2314,11 +2466,11 @@ def toggle_tenant_payment(year, month):
         
         status = 'paid' if new_amount > 0 else 'unpaid'
         flash(f'Tenant payment marked as {status} for {year}-{month:02d}', 'success')
-        return redirect(url_for('condo'))
-        
+        return redirect(url_for('condo', year=year))
+
     except Exception as e:
         flash(f'Error updating tenant payment: {str(e)}', 'error')
-        return redirect(url_for('condo'))
+        return redirect(url_for('condo', year=year))
 
 @app.route('/condo/toggle_property_tax/<int:tax_id>', methods=['POST'])
 def toggle_property_tax_payment(tax_id):
@@ -2327,34 +2479,536 @@ def toggle_property_tax_payment(tax_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Get current status
-        cursor.execute('SELECT paid FROM property_tax_schedule WHERE id = ?', (tax_id,))
+        # Get current status and year
+        cursor.execute('SELECT paid, year FROM property_tax_schedule WHERE id = ?', (tax_id,))
         result = cursor.fetchone()
-        
+
         if result:
+            tax_year = result['year']
             new_status = 0 if result['paid'] else 1
             paid_date = get_toronto_date() if new_status else None
-            
+
             cursor.execute('''
-                UPDATE property_tax_schedule 
+                UPDATE property_tax_schedule
                 SET paid = ?, paid_date = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (new_status, paid_date, tax_id))
-            
+
             conn.commit()
             conn.close()
-            
+
             status = 'paid' if new_status else 'unpaid'
             flash(f'Property tax installment marked as {status}', 'success')
+            return redirect(url_for('condo', year=tax_year))
         else:
             flash('Property tax installment not found', 'error')
-        
-        return redirect(url_for('condo'))
-        
+            return redirect(url_for('condo'))
+
     except Exception as e:
         flash(f'Error updating property tax: {str(e)}', 'error')
         return redirect(url_for('condo'))
     
+# ============== AI ASSISTANT ROUTES ==============
+
+@app.route('/ai_assistant')
+def ai_assistant():
+    """AI Assistant page for querying financial data"""
+    return render_template('ai_assistant.html')
+
+@app.route('/api/ai/conversations', methods=['GET'])
+def get_conversations():
+    """Get all conversations"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, title, created_at, updated_at
+            FROM ai_conversations
+            WHERE is_active = 1
+            ORDER BY updated_at DESC
+        ''')
+        conversations = cursor.fetchall()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'conversations': [{
+                'id': row['id'],
+                'title': row['title'],
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at']
+            } for row in conversations]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ai/conversation/<int:conversation_id>', methods=['GET'])
+def get_conversation(conversation_id):
+    """Load a specific conversation with its messages"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Get conversation details
+        cursor.execute('SELECT * FROM ai_conversations WHERE id = ?', (conversation_id,))
+        conversation = cursor.fetchone()
+
+        if not conversation:
+            return jsonify({'success': False, 'error': 'Conversation not found'}), 404
+
+        # Get messages
+        cursor.execute('''
+            SELECT role, content, created_at
+            FROM ai_messages
+            WHERE conversation_id = ?
+            ORDER BY created_at ASC
+        ''', (conversation_id,))
+        messages = cursor.fetchall()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'conversation': {
+                'id': conversation['id'],
+                'title': conversation['title'],
+                'created_at': conversation['created_at'],
+                'updated_at': conversation['updated_at']
+            },
+            'messages': [{
+                'role': msg['role'],
+                'content': msg['content'],
+                'created_at': msg['created_at']
+            } for msg in messages]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ai/conversation/<int:conversation_id>', methods=['DELETE'])
+def delete_conversation(conversation_id):
+    """Delete a conversation"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Soft delete
+        cursor.execute('''
+            UPDATE ai_conversations
+            SET is_active = 0
+            WHERE id = ?
+        ''', (conversation_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    """API endpoint to chat with Ollama AI about financial data"""
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '')
+        conversation_id = data.get('conversation_id')
+
+        if not user_message:
+            return jsonify({'error': 'Message is required'}), 400
+
+        # Fetch financial context from databases
+        context = fetch_financial_context()
+
+        # Initialize Ollama client
+        client = Client(
+            host=OLLAMA_HOST,
+            headers={'Authorization': f'Bearer {OLLAMA_API_KEY}'}
+        )
+
+        # Build messages with system context
+        messages = [
+            {
+                'role': 'system',
+                'content': f"""You are a helpful financial assistant for the Perfin app. You have DIRECT ACCESS to the user's complete financial database.
+
+CRITICAL: You MUST use the data provided below to answer questions. DO NOT say you don't have access to data - you DO have it right here!
+
+=== USER'S COMPLETE FINANCIAL DATA ===
+{context}
+=== END OF DATA ===
+
+IMPORTANT INSTRUCTIONS:
+1. ALWAYS reference the specific numbers from the data above when answering
+2. The data shows ACTUAL records from the user's database with dates, notes, and all details
+3. When asked about activities (gym, jiu jitsu, etc.), COUNT the occurrences in the data
+4. When asked about spending, USE the detailed transaction log with dates
+5. Be specific with dates, amounts, counts, and NOTES
+6. If asked about a specific date that doesn't have data, say "I don't have data recorded for [date] yet. The most recent data I have is from [latest_date]" and show what data IS available nearby
+7. NEVER say "there is no Notes section" - notes are included in the activity log with "| Notes:" labels
+8. NEVER say "I don't have access" - you have all the data above!
+9. When showing notes, quote them directly from the data
+
+Answer style:
+- Be conversational and friendly
+- Use exact numbers from the data
+- Provide insights and suggestions based on the patterns you see
+- Format currency as $X,XXX.XX"""
+            }
+        ]
+
+        # If conversation exists, load previous messages for context
+        if conversation_id:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT role, content FROM ai_messages
+                WHERE conversation_id = ?
+                ORDER BY created_at ASC
+            ''', (conversation_id,))
+            previous_messages = cursor.fetchall()
+            conn.close()
+
+            # Add previous messages (last 8 for context)
+            for msg in previous_messages[-8:]:
+                messages.append({
+                    'role': msg['role'],
+                    'content': msg['content']
+                })
+
+        # Add current user message
+        messages.append({
+            'role': 'user',
+            'content': user_message
+        })
+
+        # Call Ollama API with streaming
+        response_text = ''
+        for part in client.chat(OLLAMA_MODEL, messages=messages, stream=True):
+            response_text += part['message']['content']
+
+        # Save conversation to database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Create new conversation if needed
+        if not conversation_id:
+            # Generate title from first message
+            title = user_message[:50] + ('...' if len(user_message) > 50 else '')
+            cursor.execute('''
+                INSERT INTO ai_conversations (title, created_at, updated_at)
+                VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ''', (title,))
+            conversation_id = cursor.lastrowid
+        else:
+            # Update conversation timestamp
+            cursor.execute('''
+                UPDATE ai_conversations
+                SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (conversation_id,))
+
+        # Save user message
+        cursor.execute('''
+            INSERT INTO ai_messages (conversation_id, role, content, created_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (conversation_id, 'user', user_message))
+
+        # Save assistant response
+        cursor.execute('''
+            INSERT INTO ai_messages (conversation_id, role, content, created_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (conversation_id, 'assistant', response_text))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'response': response_text,
+            'conversation_id': conversation_id,
+            'model': OLLAMA_MODEL
+        })
+
+    except Exception as e:
+        error_msg = f"Error in AI chat: {str(e)}"
+        print(error_msg)
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': error_msg
+        }), 500
+
+def fetch_financial_context():
+    """Fetch comprehensive financial context from all databases"""
+    context_parts = []
+    conn = None
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 1. Spending Data (last 90 days with full details)
+        try:
+            cursor.execute('''
+                SELECT date, item, price, category
+                FROM spending_log
+                WHERE date >= date('now', '-90 days')
+                ORDER BY date DESC
+            ''')
+            spending_data = cursor.fetchall()
+
+            if spending_data:
+                total_spending = sum(float(row['price']) for row in spending_data)
+                spending_by_category = {}
+                detailed_transactions = []
+
+                for row in spending_data:
+                    cat = row['category'] or 'Uncategorized'
+                    spending_by_category[cat] = spending_by_category.get(cat, 0) + float(row['price'])
+                    date_str = str(row['date'])
+                    detailed_transactions.append(f"{date_str}: {row['item']} - ${float(row['price']):.2f} ({cat})")
+
+                context_parts.append(f"""
+SPENDING DATA (Last 90 Days):
+- Total Spending: ${total_spending:.2f}
+- Number of Transactions: {len(spending_data)}
+- Spending by Category: {', '.join([f'{k}: ${v:.2f}' for k, v in spending_by_category.items()])}
+
+DETAILED TRANSACTION LOG (Most Recent 50):
+{chr(10).join(detailed_transactions[:50])}
+""")
+            else:
+                context_parts.append("\nSPENDING DATA: No spending records in last 90 days\n")
+        except Exception as e:
+            print(f"Error fetching spending data: {e}")
+            import traceback
+            traceback.print_exc()
+            context_parts.append(f"\nSPENDING DATA: Error - {str(e)}\n")
+
+        # 2. Personal Activities (ALL historical data for complete analysis)
+        try:
+            cursor.execute('''
+                SELECT date, gym, jiu_jitsu, skateboarding, work, coitus,
+                       sauna, supplements, notes
+                FROM personal_log
+                ORDER BY date DESC
+            ''')
+            personal_data = cursor.fetchall()
+
+            if personal_data:
+                activity_counts = {
+                    'gym': 0, 'jiu_jitsu': 0, 'skateboarding': 0, 'work': 0,
+                    'coitus': 0, 'sauna': 0, 'supplements': 0
+                }
+
+                # Build detailed activity log with dates
+                activity_details = []
+                jj_dates = []
+                gym_dates = []
+                skateboarding_dates = []
+
+                for row in personal_data:
+                    # Convert date to string for display
+                    date_str = str(row['date'])
+                    day_activities = []
+
+                    if row['gym']:
+                        activity_counts['gym'] += 1
+                        day_activities.append('Gym')
+                        gym_dates.append(date_str)
+                    if row['jiu_jitsu']:
+                        activity_counts['jiu_jitsu'] += 1
+                        day_activities.append('Jiu Jitsu')
+                        jj_dates.append(date_str)
+                    if row['skateboarding']:
+                        activity_counts['skateboarding'] += 1
+                        day_activities.append('Skateboarding')
+                        skateboarding_dates.append(date_str)
+                    if row['work']:
+                        activity_counts['work'] += 1
+                        day_activities.append('Work')
+                    if row['sauna']:
+                        activity_counts['sauna'] += 1
+                        day_activities.append('Sauna')
+                    if row['supplements']:
+                        activity_counts['supplements'] += 1
+                        day_activities.append('Supplements')
+
+                    if day_activities or row['notes']:
+                        activity_line = f"{date_str}: {', '.join(day_activities)}"
+                        # Add notes if they exist
+                        if row['notes'] and row['notes'].strip():
+                            activity_line += f" | Notes: {row['notes'].strip()}"
+                        activity_details.append(activity_line)
+
+                # Get date range
+                if personal_data:
+                    earliest_date = str(personal_data[-1]['date'])
+                    latest_date = str(personal_data[0]['date'])
+                    total_days = len(personal_data)
+
+                    context_parts.append(f"""
+PERSONAL ACTIVITIES DATABASE (Complete History):
+DATE RANGE: {earliest_date} to {latest_date} ({total_days} days of records)
+
+LIFETIME TOTALS:
+- Gym Sessions: {activity_counts['gym']} times
+- Jiu Jitsu Sessions: {activity_counts['jiu_jitsu']} times
+- Skateboarding Sessions: {activity_counts['skateboarding']} times
+- Work Days: {activity_counts['work']} days
+- Sauna Sessions: {activity_counts['sauna']} times
+- Supplements Taken: {activity_counts['supplements']} days
+
+DETAILED ACTIVITY LOG (Most Recent 30 Days):
+{chr(10).join(activity_details[:30])}
+
+ALL JIU JITSU DATES (Complete List - for analyzing patterns):
+{', '.join(jj_dates) if jj_dates else 'No jiu jitsu sessions recorded'}
+
+ALL GYM DATES (Complete List - for analyzing patterns):
+{', '.join(gym_dates) if gym_dates else 'No gym sessions recorded'}
+
+ALL SKATEBOARDING DATES (Complete List):
+{', '.join(skateboarding_dates) if skateboarding_dates else 'No skateboarding sessions recorded'}
+""")
+            else:
+                context_parts.append("\nPERSONAL ACTIVITIES: No activity records found\n")
+        except Exception as e:
+            print(f"Error fetching personal activities: {e}")
+            import traceback
+            traceback.print_exc()
+            context_parts.append(f"\nPERSONAL ACTIVITIES: Error - {str(e)}\n")
+
+        # 3. Portfolio Data
+        try:
+            cursor.execute('''
+                SELECT etf_symbol, purchase_value
+                FROM etf_holdings
+                ORDER BY etf_symbol
+            ''')
+            etf_holdings = cursor.fetchall()
+
+            cursor.execute('''
+                SELECT date, total_portfolio_value, nasdaq_value, btcc_value, zsp_value
+                FROM portfolio_log
+                ORDER BY date DESC
+                LIMIT 1
+            ''')
+            latest_portfolio = cursor.fetchone()
+
+            if etf_holdings or latest_portfolio:
+                total_invested = sum(float(row['purchase_value']) for row in etf_holdings) if etf_holdings else 0
+
+                portfolio_info = f"""
+ETF PORTFOLIO:
+- Total Invested: ${total_invested:.2f}
+"""
+                if latest_portfolio:
+                    current_value = float(latest_portfolio['total_portfolio_value'])
+                    profit_loss = current_value - total_invested
+                    profit_loss_pct = (profit_loss / total_invested * 100) if total_invested > 0 else 0
+
+                    portfolio_info += f"""- Current Value: ${current_value:.2f}
+- Profit/Loss: ${profit_loss:.2f} ({profit_loss_pct:+.2f}%)
+- NAS Value: ${latest_portfolio['nasdaq_value']:.2f}
+- BTCC Value: ${latest_portfolio['btcc_value']:.2f}
+- ZSP Value: ${latest_portfolio['zsp_value']:.2f}
+"""
+
+                if etf_holdings:
+                    holdings_list = ', '.join([f"{row['etf_symbol']}: ${row['purchase_value']}" for row in etf_holdings])
+                    portfolio_info += f"- Holdings: {holdings_list}\n"
+                context_parts.append(portfolio_info)
+            else:
+                context_parts.append("\nETF PORTFOLIO: No portfolio data found\n")
+        except Exception as e:
+            print(f"Error fetching portfolio data: {e}")
+            import traceback
+            traceback.print_exc()
+            context_parts.append(f"\nETF PORTFOLIO: Error - {str(e)}\n")
+
+        # 4. Condo Data
+        try:
+            cursor.execute('SELECT * FROM condo_config LIMIT 1')
+            condo_config = cursor.fetchone()
+
+            if condo_config:
+                mortgage = float(condo_config['mortgage'])
+                condo_fee = float(condo_config['condo_fee'])
+                property_tax_monthly = float(condo_config['property_tax'])  # Already monthly amount
+                rent_amount = float(condo_config['rent_amount'])
+                monthly_costs = mortgage + condo_fee + property_tax_monthly
+                net_monthly = rent_amount - monthly_costs
+                annual_property_tax = property_tax_monthly * 12
+
+                context_parts.append(f"""
+CONDO FINANCES:
+- Mortgage Payment (monthly): ${mortgage:.2f}
+- Condo Fee (monthly): ${condo_fee:.2f}
+- Property Tax (monthly): ${property_tax_monthly:.2f}
+- Property Tax (annual): ${annual_property_tax:.2f}
+- Rent Income (monthly): ${rent_amount:.2f}
+- Total Monthly Costs (Mortgage + Condo Fee + Property Tax): ${monthly_costs:.2f}
+- Net Monthly Income (Rent - Total Costs): ${net_monthly:.2f}
+- Net Annual Income: ${net_monthly * 12:.2f}
+
+IMPORTANT: Property tax is ${property_tax_monthly:.2f} PER MONTH, which equals ${annual_property_tax:.2f} per year.
+""")
+            else:
+                context_parts.append("\nCONDO FINANCES: No condo config found\n")
+        except Exception as e:
+            print(f"Error fetching condo data: {e}")
+            import traceback
+            traceback.print_exc()
+            context_parts.append(f"\nCONDO FINANCES: Error - {str(e)}\n")
+
+        # 5. Savings Data
+        try:
+            cursor.execute('SELECT * FROM savings_config LIMIT 1')
+            savings_config = cursor.fetchone()
+
+            if savings_config:
+                biweekly_income = float(savings_config['biweekly_income'])
+                savings_pct = float(savings_config['savings_percentage'])
+                investorline_pct = float(savings_config['investorline_percentage'])
+                usd_pct = float(savings_config['usd_percentage'])
+
+                savings_amount = biweekly_income * (savings_pct / 100)
+                investorline_amount = biweekly_income * (investorline_pct / 100)
+                usd_amount = biweekly_income * (usd_pct / 100)
+
+                context_parts.append(f"""
+SAVINGS CONFIGURATION:
+- Biweekly Income: ${biweekly_income:.2f}
+- Savings Percentage: {savings_pct}% (${savings_amount:.2f} per paycheck)
+- Investorline Percentage: {investorline_pct}% (${investorline_amount:.2f} per paycheck)
+- USD Percentage: {usd_pct}% (${usd_amount:.2f} per paycheck)
+- Total Allocated Per Paycheck: ${savings_amount + investorline_amount + usd_amount:.2f}
+- Annual Savings Projection: ${(savings_amount + investorline_amount + usd_amount) * 26:.2f}
+""")
+            else:
+                context_parts.append("\nSAVINGS: No savings config found\n")
+        except Exception as e:
+            print(f"Error fetching savings data: {e}")
+            import traceback
+            traceback.print_exc()
+            context_parts.append(f"\nSAVINGS: Error - {str(e)}\n")
+
+        if conn:
+            conn.close()
+
+        final_context = '\n'.join(context_parts) if context_parts else "No financial data available - database might be empty."
+        print(f"[DEBUG] Context length: {len(final_context)} characters")
+        return final_context
+
+    except Exception as e:
+        print(f"CRITICAL Error in fetch_financial_context: {e}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.close()
+        return f"CRITICAL ERROR fetching data: {str(e)}. Check server logs for details."
+
 if __name__ == '__main__':
     # Add pytz to requirements
     app.run(debug=True, host='0.0.0.0', port=5001)

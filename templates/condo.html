@@ -3,79 +3,147 @@
 {% block title %}Condo Management - Perfin{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12">
+<div class="row mb-3">
+    <div class="col-md-8">
         <h1><i class="fas fa-building"></i> Condo Property Management</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <!-- Year Navigation -->
+        <div class="btn-group" role="group">
+            {% for year in available_years %}
+                <a href="{{ url_for('condo', year=year) }}" class="btn {% if year == current_year %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    {{ year }}
+                </a>
+            {% endfor %}
+            {% if current_year + 1 not in available_years %}
+                <a href="{{ url_for('condo', year=current_year + 1) }}" class="btn btn-outline-success">
+                    <i class="fas fa-plus"></i> {{ current_year + 1 }}
+                </a>
+            {% endif %}
+        </div>
     </div>
 </div>
 
-<!-- Current Expenses Overview -->
+<!-- Lease Terms Overview -->
 <div class="row mb-4">
     <div class="col-md-6">
         <div class="card">
             <div class="card-header bg-primary text-white">
-                <h5><i class="fas fa-calculator"></i> Monthly Expenses Overview</h5>
+                <h5><i class="fas fa-file-contract"></i> Lease Terms for {{ current_year }}</h5>
             </div>
             <div class="card-body">
-                <table class="table table-borderless">
-                    <tr>
-                        <td><strong>Mortgage:</strong></td>
-                        <td class="text-end">${{ "%.2f"|format(config.mortgage) }}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Condo Fee:</strong></td>
-                        <td class="text-end">${{ "%.2f"|format(config.condo_fee) }}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Property Tax:</strong></td>
-                        <td class="text-end">${{ "%.2f"|format(config.property_tax) }}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Electricity:</strong></td>
-                        <td class="text-end">Full</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Gas:</strong></td>
-                        <td class="text-end">Full</td>
-                    </tr>
-                    <tr class="border-top">
-                        <td><strong>Total:</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_expenses) }}</strong></td>
-                    </tr>
-                    <tr class="{% if revenue < 0 %}text-danger{% else %}text-success{% endif %}">
-                        <td><strong>Revenue:</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(revenue) }}</strong></td>
-                    </tr>
-                    <tr class="{% if yearly_revenue < 0 %}text-danger{% else %}text-success{% endif %}">
-                        <td><strong>Yearly:</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(yearly_revenue) }}</strong></td>
-                    </tr>
-                </table>
-                
-                <hr>
-                <form method="POST" action="{{ url_for('update_condo_config') }}" class="row g-2">
-                    <div class="col-6">
-                        <label class="form-label">Mortgage</label>
-                        <input type="number" step="0.01" name="mortgage" class="form-control" value="{{ config.mortgage }}" required>
+                {% for cfg in all_configs %}
+                    {% set cfg_date = cfg.effective_date %}
+                    {% set cfg_month = cfg_date.split('-')[1]|int %}
+                    {% set month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] %}
+
+                    <div class="lease-term-block mb-3 p-3 border rounded">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong class="text-primary">
+                                <i class="fas fa-calendar"></i> Starting {{ month_names[cfg_month] }} {{ current_year }}
+                            </strong>
+                            <button class="btn btn-sm btn-outline-primary" onclick="toggleEdit{{ cfg.id }}()">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        </div>
+
+                        <div id="display{{ cfg.id }}">
+                            <table class="table table-sm table-borderless mb-0">
+                                <tr><td>Rent:</td><td class="text-end"><strong>${{ "%.2f"|format(cfg.rent_amount) }}</strong></td></tr>
+                                <tr><td>Mortgage:</td><td class="text-end">${{ "%.2f"|format(cfg.mortgage) }}</td></tr>
+                                <tr><td>Condo Fee:</td><td class="text-end">${{ "%.2f"|format(cfg.condo_fee) }}</td></tr>
+                                <tr><td>Property Tax:</td><td class="text-end">${{ "%.2f"|format(cfg.property_tax) }}</td></tr>
+                                <tr class="border-top">
+                                    <td><strong>Net Monthly:</strong></td>
+                                    {% set net = cfg.rent_amount - cfg.mortgage - cfg.condo_fee - cfg.property_tax %}
+                                    <td class="text-end {% if net < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        <strong>${{ "%.2f"|format(net) }}</strong>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <div id="edit{{ cfg.id }}" style="display: none;">
+                            <form method="POST" action="{{ url_for('update_condo_config', config_id=cfg.id) }}" class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label">Rent</label>
+                                    <input type="number" step="0.01" name="rent_amount" class="form-control form-control-sm" value="{{ cfg.rent_amount }}" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Mortgage</label>
+                                    <input type="number" step="0.01" name="mortgage" class="form-control form-control-sm" value="{{ cfg.mortgage }}" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Condo Fee</label>
+                                    <input type="number" step="0.01" name="condo_fee" class="form-control form-control-sm" value="{{ cfg.condo_fee }}" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Property Tax</label>
+                                    <input type="number" step="0.01" name="property_tax" class="form-control form-control-sm" value="{{ cfg.property_tax }}" required>
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-success btn-sm w-100"><i class="fas fa-save"></i> Save</button>
+                                    <button type="button" class="btn btn-secondary btn-sm w-100 mt-1" onclick="toggleEdit{{ cfg.id }}()">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <script>
+                        function toggleEdit{{ cfg.id }}() {
+                            const display = document.getElementById('display{{ cfg.id }}');
+                            const edit = document.getElementById('edit{{ cfg.id }}');
+                            if (display.style.display === 'none') {
+                                display.style.display = 'block';
+                                edit.style.display = 'none';
+                            } else {
+                                display.style.display = 'none';
+                                edit.style.display = 'block';
+                            }
+                        }
+                        </script>
                     </div>
-                    <div class="col-6">
-                        <label class="form-label">Condo Fee</label>
-                        <input type="number" step="0.01" name="condo_fee" class="form-control" value="{{ config.condo_fee }}" required>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label">Property Tax</label>
-                        <input type="number" step="0.01" name="property_tax" class="form-control" value="{{ config.property_tax }}" required>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label">Rent Amount</label>
-                        <input type="number" step="0.01" name="rent_amount" class="form-control" value="{{ config.rent_amount }}" required>
-                    </div>
-                    <div class="col-12">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-save"></i> Update Configuration
-                        </button>
-                    </div>
-                </form>
+                {% endfor %}
+
+                <!-- Add New Lease Term Form -->
+                <button class="btn btn-success w-100" onclick="document.getElementById('newLeaseForm').style.display='block'; this.style.display='none';">
+                    <i class="fas fa-plus"></i> Add New Lease Term (Mid-Year Change)
+                </button>
+
+                <div id="newLeaseForm" style="display: none; background: var(--bg-secondary);" class="mt-3 p-3 border rounded">
+                    <h6><i class="fas fa-plus-circle"></i> New Lease Terms</h6>
+                    <form method="POST" action="{{ url_for('add_lease_term', year=current_year) }}" class="row g-2">
+                        <div class="col-12">
+                            <label class="form-label">Starting Month</label>
+                            <select name="start_month" class="form-select" required>
+                                <option value="">Select month...</option>
+                                {% for i in range(1, 13) %}
+                                    {% set month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] %}
+                                    <option value="{{ i }}">{{ month_names[i] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Rent Amount</label>
+                            <input type="number" step="0.01" name="rent_amount" class="form-control" value="{{ config.rent_amount }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Mortgage</label>
+                            <input type="number" step="0.01" name="mortgage" class="form-control" value="{{ config.mortgage }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Condo Fee</label>
+                            <input type="number" step="0.01" name="condo_fee" class="form-control" value="{{ config.condo_fee }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Property Tax</label>
+                            <input type="number" step="0.01" name="property_tax" class="form-control" value="{{ config.property_tax }}" required>
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary w-100"><i class="fas fa-save"></i> Add Lease Term</button>
+                            <button type="button" class="btn btn-secondary w-100 mt-1" onclick="document.getElementById('newLeaseForm').style.display='none'; document.querySelector('.btn-success.w-100').style.display='block';">Cancel</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -212,19 +280,19 @@
                 <div class="row mb-3">
                     <div class="col-md-3">
                         <div class="stat-card bg-info text-white">
-                            <div class="stat-number">${{ "%.2f"|format(tax_summary.total_amount) if tax_summary else "0.00" }}</div>
+                            <div class="stat-number">${{ "%.2f"|format(tax_summary.total_amount) if tax_summary and tax_summary.total_amount else "0.00" }}</div>
                             <small>Total Amount</small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card bg-success text-white">
-                            <div class="stat-number">{{ tax_summary.paid_count if tax_summary else 0 }}</div>
+                            <div class="stat-number">{{ tax_summary.paid_count if tax_summary and tax_summary.paid_count else 0 }}</div>
                             <small>Paid</small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card bg-warning text-dark">
-                            <div class="stat-number">{{ (tax_summary.total_count - tax_summary.paid_count) if tax_summary else 0 }}</div>
+                            <div class="stat-number">{{ (tax_summary.total_count - tax_summary.paid_count) if tax_summary and tax_summary.total_count else 0 }}</div>
                             <small>Remaining</small>
                         </div>
                     </div>
@@ -248,31 +316,40 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for tax in property_tax_data %}
-                                <tr {% if tax.was_late %}class="table-warning"{% endif %}>
-                                    <td><strong>{{ tax.installment_number }}{{ ['st', 'nd', 'rd', 'th'][tax.installment_number-1] if tax.installment_number <= 4 else 'th' }}</strong></td>
-                                    <td>${{ "%.2f"|format(tax.amount) }}</td>
-                                    <td>{{ tax.due_date }}{% if tax.was_late %} <span class="badge bg-warning">was late</span>{% endif %}</td>
-                                    <td>
-                                        {% if tax.paid %}
-                                            <span class="badge bg-success">Paid</span>
-                                            {% if tax.paid_date %}
-                                                <small class="text-muted">({{ tax.paid_date }})</small>
+                            {% if property_tax_data %}
+                                {% for tax in property_tax_data %}
+                                    <tr {% if tax.was_late %}class="table-warning"{% endif %}>
+                                        <td><strong>{{ tax.installment_number }}{{ ['st', 'nd', 'rd', 'th'][tax.installment_number-1] if tax.installment_number <= 4 else 'th' }}</strong></td>
+                                        <td>${{ "%.2f"|format(tax.amount) }}</td>
+                                        <td>{{ tax.due_date }}{% if tax.was_late %} <span class="badge bg-warning">was late</span>{% endif %}</td>
+                                        <td>
+                                            {% if tax.paid %}
+                                                <span class="badge bg-success">Paid</span>
+                                                {% if tax.paid_date %}
+                                                    <small class="text-muted">({{ tax.paid_date }})</small>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-danger">Unpaid</span>
                                             {% endif %}
-                                        {% else %}
-                                            <span class="badge bg-danger">Unpaid</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <form method="POST" action="{{ url_for('toggle_property_tax_payment', tax_id=tax.id) }}" style="display:inline;">
-                                            <button type="submit" class="btn btn-sm {% if tax.paid %}btn-success{% else %}btn-outline-success{% endif %}">
-                                                <i class="fas fa-{% if tax.paid %}check-circle{% else %}circle{% endif %}"></i>
-                                                {{ 'Paid' if tax.paid else 'Mark Paid' }}
-                                            </button>
-                                        </form>
+                                        </td>
+                                        <td>
+                                            <form method="POST" action="{{ url_for('toggle_property_tax_payment', tax_id=tax.id) }}" style="display:inline;">
+                                                <button type="submit" class="btn btn-sm {% if tax.paid %}btn-success{% else %}btn-outline-success{% endif %}">
+                                                    <i class="fas fa-{% if tax.paid %}check-circle{% else %}circle{% endif %}"></i>
+                                                    {{ 'Paid' if tax.paid else 'Mark Paid' }}
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="fas fa-info-circle"></i> No property tax schedule for {{ current_year }} yet.
+                                        <br><small>Add installments manually in the database or create them through the admin panel.</small>
                                     </td>
                                 </tr>
-                            {% endfor %}
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -283,57 +360,55 @@
 
 <!-- Custom Month Edit Modal - Single Reusable Modal -->
 <div id="monthModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999999;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; min-width: 450px; z-index: 1000000;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
-            <h5 style="margin: 0; color: #333;" id="monthModalTitle"><i class="fas fa-edit"></i> Edit Month Data</h5>
-            <button onclick="closeMonthModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-primary); padding: 30px; border-radius: 10px; min-width: 450px; z-index: 1000000; box-shadow: var(--shadow-xl);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px;">
+            <h5 style="margin: 0; color: var(--text-primary);" id="monthModalTitle"><i class="fas fa-edit"></i> Edit Month Data</h5>
+            <button onclick="closeMonthModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary);">&times;</button>
         </div>
-        
+
         <form id="monthForm" method="POST" action="">
             <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Tenant Paid ($)</label>
-                <input type="number" id="tenantPaidInput" name="tenant_paid" 
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Tenant Paid ($)</label>
+                <input type="number" id="tenantPaidInput" name="tenant_paid"
                        step="0.01" min="0" value="0" required
-                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+                       style="width: 100%; padding: 10px; border: 2px solid var(--border-color); border-radius: 5px; font-size: 16px; background: var(--bg-primary); color: var(--text-primary);">
             </div>
-            
+
             <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Enwin Bill ($)</label>
-                <input type="number" id="enwinBillInput" name="enwin_bill" 
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Enwin Bill ($)</label>
+                <input type="number" id="enwinBillInput" name="enwin_bill"
                        step="0.01" min="0" value="0" required
-                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+                       style="width: 100%; padding: 10px; border: 2px solid var(--border-color); border-radius: 5px; font-size: 16px; background: var(--bg-primary); color: var(--text-primary);">
             </div>
-            
+
             <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Enbridge Bill ($)</label>
-                <input type="number" id="enbridgeBillInput" name="enbridge_bill" 
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Enbridge Bill ($)</label>
+                <input type="number" id="enbridgeBillInput" name="enbridge_bill"
                        step="0.01" min="0" value="0" required
-                       style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+                       style="width: 100%; padding: 10px; border: 2px solid var(--border-color); border-radius: 5px; font-size: 16px; background: var(--bg-primary); color: var(--text-primary);">
             </div>
-            
+
             <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Who Paid Utilities</label>
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Who Paid Utilities</label>
                 <select id="whoPaidUtilitiesSelect" name="who_paid_utilities"
-                        style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 5px; font-size: 16px; background: white;">
+                        style="width: 100%; padding: 10px; border: 2px solid var(--border-color); border-radius: 5px; font-size: 16px; background: var(--bg-primary); color: var(--text-primary);">
                     <option value="Me">Me</option>
                     <option value="Tenant">Tenant</option>
                 </select>
             </div>
-            
-            <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
-                <h6 style="margin: 0 0 10px 0; color: #333;"><i class="fas fa-info-circle"></i> Utility Summary</h6>
-                <p style="margin: 5px 0; color: #333;">
+
+            <div style="background: rgba(79, 70, 229, 0.1); border: 1px solid var(--primary-color); border-radius: 5px; padding: 15px; margin-bottom: 20px;">
+                <h6 style="margin: 0 0 10px 0; color: var(--text-primary);"><i class="fas fa-info-circle"></i> Utility Summary</h6>
+                <p style="margin: 5px 0; color: var(--text-primary);">
                     <strong>Total Utilities: $<span id="totalUtilitiesDisplay">0.00</span></strong>
                 </p>
             </div>
-            
+
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button type="button" onclick="closeMonthModal()" 
-                        style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                <button type="button" onclick="closeMonthModal()" class="btn btn-secondary">
                     Cancel
                 </button>
-                <button type="submit" 
-                        style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                <button type="submit" class="btn btn-primary">
                     <i class="fas fa-save"></i> Save Changes
                 </button>
             </div>
@@ -421,4 +496,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<style>
+.lease-term-block {
+    background: var(--bg-secondary);
+    transition: box-shadow var(--transition-fast);
+}
+
+.lease-term-block:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.lease-term-block .table td {
+    padding: 0.3rem 0.5rem;
+}
+</style>
 {% endblock %}

@@ -74,10 +74,16 @@
 <div id="dayDetailsModalOverlay" class="modal-overlay" style="display: none;">
     <div class="modal-content">
         <div class="modal-header">
-            <h5><i class="fas fa-calendar-day"></i> Day Details</h5>
+            <button onclick="navigateDay(-1)" class="btn btn-sm btn-outline-primary" style="margin-right: auto;">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <h5 id="modalDayTitle" style="margin: 0 15px;"><i class="fas fa-calendar-day"></i> Day Details</h5>
+            <button onclick="navigateDay(1)" class="btn btn-sm btn-outline-primary" style="margin-right: 10px;">
+                <i class="fas fa-chevron-right"></i>
+            </button>
             <button onclick="closeDayDetailsModal()" class="modal-close-btn">&times;</button>
         </div>
-        
+
         <div id="modalDayDetails" class="modal-body">
             <p class="text-muted">Loading...</p>
         </div>
@@ -157,26 +163,32 @@
     .modal-overlay {
         padding: 10px;
     }
-    
+
     .modal-content {
         max-height: 95vh;
         margin: 0;
     }
-    
+
     .modal-header {
         padding: 15px 20px;
+        gap: 8px;
     }
-    
+
     .modal-header h5 {
         font-size: 1.1rem;
     }
-    
+
+    .modal-header .btn-sm {
+        padding: 4px 8px;
+        font-size: 14px;
+    }
+
     .modal-close-btn {
         font-size: 24px;
         width: 35px;
         height: 35px;
     }
-    
+
     .modal-body {
         padding: 20px;
     }
@@ -186,27 +198,34 @@
     .modal-overlay {
         padding: 5px;
     }
-    
+
     .modal-content {
         max-height: 98vh;
         border-radius: 8px;
     }
-    
+
     .modal-header {
-        padding: 12px 15px;
+        padding: 10px 12px;
         border-radius: 8px 8px 0 0;
+        gap: 5px;
     }
-    
+
     .modal-header h5 {
-        font-size: 1rem;
+        font-size: 0.9rem;
+        margin: 0 5px !important;
     }
-    
+
+    .modal-header .btn-sm {
+        padding: 3px 6px;
+        font-size: 12px;
+    }
+
     .modal-close-btn {
         font-size: 22px;
         width: 32px;
         height: 32px;
     }
-    
+
     .modal-body {
         padding: 15px;
     }
@@ -473,19 +492,51 @@ function generateCalendar() {
 }
 
 function selectDate(dateStr) {
-    selectedDate = new Date(dateStr);
+    // Parse date string as local date to avoid timezone offset issues
+    const [year, month, day] = dateStr.split('-').map(Number);
+    selectedDate = new Date(year, month - 1, day);
+    generateCalendar();
+    loadDayDetails(dateStr);
+}
+
+function navigateDay(direction) {
+    if (!selectedDate) return;
+
+    // Navigate to previous or next day
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() + direction);
+
+    // Update selected date
+    selectedDate = newDate;
+
+    // Format date string for loading details
+    const dateStr = newDate.toISOString().split('T')[0];
+
+    // Update calendar display and load new day details
     generateCalendar();
     loadDayDetails(dateStr);
 }
 
 function loadDayDetails(dateStr) {
     const dayData = calendarData[dateStr];
-    
-    let detailsHTML = `<h6>${new Date(dateStr).toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+
+    // Parse date string as local date to avoid timezone issues
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const localDate = new Date(year, month - 1, day);
+
+    // Update modal title with the selected date
+    const formattedDate = localDate.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+    });
+    document.getElementById('modalDayTitle').innerHTML = `<i class="fas fa-calendar-day"></i> ${formattedDate}`;
+
+    let detailsHTML = `<h6>${localDate.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
     })}</h6>`;
     
     if (!dayData || (!dayData.personal && !dayData.spending)) {

@@ -1,0 +1,825 @@
+{% extends "base.html" %}
+
+{% block title %}AI Assistant - Perfin{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h1><i class="fas fa-robot"></i> AI Financial Assistant</h1>
+        <p class="text-muted">Ask me anything about your spending, personal habits, portfolio, condo, and savings</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Conversation History Sidebar -->
+    <div class="col-md-3 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="fas fa-history"></i> Conversations</h6>
+            </div>
+            <div class="card-body p-0">
+                <button class="btn btn-success w-100 rounded-0" onclick="startNewConversation()">
+                    <i class="fas fa-plus"></i> New Chat
+                </button>
+                <div id="conversationList" class="conversation-list">
+                    <div class="text-center p-3 text-muted">
+                        <i class="fas fa-spinner fa-spin"></i> Loading...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="col-md-9">
+        <!-- Example Questions Card (Collapsible) -->
+        <div class="card mb-3" id="examplesCard">
+            <div class="card-header bg-success text-white">
+                <button class="btn btn-sm btn-light float-end" onclick="toggleExamples()" id="toggleExamplesBtn">
+                    <i class="fas fa-chevron-up"></i>
+                </button>
+                <h6 class="mb-0"><i class="fas fa-lightbulb"></i> Example Questions</h6>
+            </div>
+            <div class="card-body py-2" id="examplesBody">
+                <div class="row">
+                    <div class="col-md-3 col-6 mb-2">
+                        <small class="text-primary fw-bold">💰 Spending</small>
+                        <div class="d-flex flex-column gap-1">
+                            <button class="btn btn-sm btn-outline-primary text-start" onclick="askQuestion('What did I spend the most on this month?')">
+                                What did I spend most on?
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary text-start" onclick="askQuestion('How much did I spend on food?')">
+                                How much on food?
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-2">
+                        <small class="text-success fw-bold">💪 Personal Habits</small>
+                        <div class="d-flex flex-column gap-1">
+                            <button class="btn btn-sm btn-outline-success text-start" onclick="askQuestion('How many times did I go to the gym in September?')">
+                                Gym in September?
+                            </button>
+                            <button class="btn btn-sm btn-outline-success text-start" onclick="askQuestion('Compare my gym vs jiu jitsu frequency')">
+                                Gym vs Jiu Jitsu?
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-2">
+                        <small class="text-info fw-bold">📈 Portfolio</small>
+                        <div class="d-flex flex-column gap-1">
+                            <button class="btn btn-sm btn-outline-info text-start" onclick="askQuestion('How is my portfolio performing?')">
+                                Portfolio performance?
+                            </button>
+                            <button class="btn btn-sm btn-outline-info text-start" onclick="askQuestion('Should I rebalance my portfolio?')">
+                                Rebalance portfolio?
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-2">
+                        <small class="text-warning fw-bold">🏠 Condo & More</small>
+                        <div class="d-flex flex-column gap-1">
+                            <button class="btn btn-sm btn-outline-warning text-start" onclick="askQuestion('What is my net monthly condo income?')">
+                                Condo net income?
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning text-start" onclick="askQuestion('Give me a complete financial overview')">
+                                Complete overview?
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Container - ChatGPT Style -->
+        <div class="card chat-card">
+            <div class="card-body p-0">
+                <div id="chatMessages" class="chat-messages">
+                    <div class="chat-message assistant">
+                        <div class="message-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="message-content">
+                            <div class="message-text">
+                                Hello! I'm your AI financial assistant with direct access to your database. I can see your spending, personal activities,
+                                portfolio, condo finances, and savings. Ask me anything! 💡
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer border-top chat-footer">
+                <div class="input-container">
+                    <textarea
+                        id="userMessage"
+                        class="form-control chat-input"
+                        placeholder="Ask me about your finances..."
+                        rows="1"
+                        onkeydown="handleKeyDown(event)"></textarea>
+                    <button class="btn btn-primary send-button" onclick="sendMessage()" id="sendButton">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Conversation List Styling */
+.conversation-list {
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+}
+
+.conversation-item {
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    position: relative;
+}
+
+.conversation-item:hover {
+    background: var(--bg-secondary);
+}
+
+.conversation-item.active {
+    background: rgba(79, 70, 229, 0.1);
+    border-left: 3px solid var(--primary-color);
+}
+
+.conversation-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conversation-date {
+    font-size: 0.6875rem;
+    color: var(--text-secondary);
+}
+
+.conversation-delete {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.conversation-item:hover .conversation-delete {
+    opacity: 1;
+}
+
+/* Chat Card Styling */
+.chat-card {
+    height: calc(100vh - 280px);
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-xl);
+    background: var(--bg-secondary);
+    scroll-behavior: smooth;
+}
+
+/* Message Styling */
+.chat-message {
+    display: flex;
+    margin-bottom: var(--space-xl);
+    gap: var(--space-md);
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-message.user {
+    flex-direction: row-reverse;
+}
+
+.message-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1.125rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.chat-message.assistant .message-icon {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #8B5CF6 100%);
+    color: white;
+}
+
+.chat-message.user .message-icon {
+    background: linear-gradient(135deg, var(--info-color) 0%, var(--primary-color) 100%);
+    color: white;
+}
+
+.message-content {
+    flex: 1;
+    max-width: 80%;
+}
+
+.message-text {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: var(--space-md) var(--space-lg);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    line-height: 1.6;
+    word-wrap: break-word;
+    border: 1px solid var(--border-light);
+}
+
+.chat-message.user .message-text {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+    color: var(--text-inverse);
+    border: none;
+}
+
+.loading-dots {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.loading-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+    40% { transform: scale(1); opacity: 1; }
+}
+
+/* Input Container */
+.chat-footer {
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-color) !important;
+}
+
+.input-container {
+    display: flex;
+    gap: var(--space-md);
+    padding: var(--space-lg);
+    background: transparent;
+}
+
+.chat-input {
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-full);
+    padding: var(--space-md) var(--space-lg);
+    font-size: 0.9375rem;
+    resize: none;
+    max-height: 120px;
+    transition: all var(--transition-base);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.chat-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+}
+
+.send-button {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
+    transition: all var(--transition-base);
+}
+
+.send-button:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: var(--shadow-lg);
+}
+
+.send-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Error Message */
+.message-text.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger-color);
+    border-left: 4px solid var(--danger-color);
+}
+
+/* AI Response Tables */
+.ai-response-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--space-md) 0;
+    font-size: 0.875rem;
+    box-shadow: var(--shadow-sm);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.ai-response-table thead {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #8B5CF6 100%);
+    color: white;
+}
+
+.ai-response-table th {
+    padding: var(--space-md) var(--space-lg);
+    text-align: left;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+}
+
+.ai-response-table td {
+    padding: var(--space-sm) var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.ai-response-table tbody tr {
+    background: var(--bg-primary);
+    transition: background var(--transition-fast);
+}
+
+.ai-response-table tbody tr:hover {
+    background: var(--bg-secondary);
+}
+
+.ai-response-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .chat-card {
+        height: calc(100vh - 360px);
+        min-height: 400px;
+    }
+
+    .conversation-list {
+        max-height: 200px;
+    }
+
+    .chat-messages {
+        padding: var(--space-md);
+    }
+
+    .message-content {
+        max-width: 85%;
+    }
+
+    .message-text {
+        padding: var(--space-sm) var(--space-md);
+        font-size: 0.875rem;
+    }
+
+    .message-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 1rem;
+    }
+
+    #examplesBody .row > div {
+        margin-bottom: var(--space-sm);
+    }
+
+    .ai-response-table {
+        font-size: 0.75rem;
+    }
+
+    .ai-response-table th,
+    .ai-response-table td {
+        padding: var(--space-sm);
+    }
+}
+</style>
+
+<script>
+let isExamplesVisible = true;
+let currentConversationId = null;
+
+// Load conversations on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadConversations();
+
+    // Auto-resize textarea
+    const textarea = document.getElementById('userMessage');
+    textarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+});
+
+function toggleExamples() {
+    isExamplesVisible = !isExamplesVisible;
+    const body = document.getElementById('examplesBody');
+    const btn = document.getElementById('toggleExamplesBtn');
+
+    if (isExamplesVisible) {
+        body.style.display = 'block';
+        btn.innerHTML = '<i class="fas fa-chevron-up"></i>';
+    } else {
+        body.style.display = 'none';
+        btn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+    }
+}
+
+function loadConversations() {
+    fetch('/api/ai/conversations')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayConversations(data.conversations);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading conversations:', error);
+        });
+}
+
+function displayConversations(conversations) {
+    const listEl = document.getElementById('conversationList');
+
+    if (conversations.length === 0) {
+        listEl.innerHTML = '<div class="text-center p-3 text-muted">No conversations yet</div>';
+        return;
+    }
+
+    listEl.innerHTML = conversations.map(conv => `
+        <div class="conversation-item ${conv.id === currentConversationId ? 'active' : ''}"
+             onclick="loadConversation(${conv.id})">
+            <button class="conversation-delete" onclick="event.stopPropagation(); deleteConversation(${conv.id})">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="conversation-title">${escapeHtml(conv.title)}</div>
+            <div class="conversation-date">${formatDate(conv.updated_at)}</div>
+        </div>
+    `).join('');
+}
+
+function loadConversation(conversationId) {
+    fetch(`/api/ai/conversation/${conversationId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentConversationId = conversationId;
+                displayLoadedConversation(data.messages);
+                updateActiveConversation(conversationId);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading conversation:', error);
+        });
+}
+
+function displayLoadedConversation(messages) {
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '';
+
+    messages.forEach(msg => {
+        addMessageToChat(msg.role, msg.content, false);
+    });
+}
+
+function updateActiveConversation(conversationId) {
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.remove('active');
+    });
+
+    const activeItem = Array.from(document.querySelectorAll('.conversation-item'))
+        .find(item => item.getAttribute('onclick').includes(`loadConversation(${conversationId})`));
+
+    if (activeItem) {
+        activeItem.classList.add('active');
+    }
+}
+
+function startNewConversation() {
+    currentConversationId = null;
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = `
+        <div class="chat-message assistant">
+            <div class="message-icon">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div class="message-content">
+                <div class="message-text">
+                    Hello! I'm your AI financial assistant with direct access to your database. I can see your spending, personal activities,
+                    portfolio, condo finances, and savings. Ask me anything! 💡
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.remove('active');
+    });
+}
+
+function deleteConversation(conversationId) {
+    if (!confirm('Delete this conversation?')) return;
+
+    fetch(`/api/ai/conversation/${conversationId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (currentConversationId === conversationId) {
+                startNewConversation();
+            }
+            loadConversations();
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting conversation:', error);
+    });
+}
+
+function askQuestion(question) {
+    document.getElementById('userMessage').value = question;
+    sendMessage();
+
+    // Collapse examples after selection
+    if (window.innerWidth < 768) {
+        isExamplesVisible = true;
+        toggleExamples();
+    }
+}
+
+function handleKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+function sendMessage() {
+    const messageInput = document.getElementById('userMessage');
+    const message = messageInput.value.trim();
+
+    if (!message) return;
+
+    // Add user message to chat
+    addMessageToChat('user', message, true);
+
+    // Clear input
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
+
+    // Show loading message
+    const loadingId = addLoadingMessage();
+
+    // Disable send button
+    const sendButton = document.getElementById('sendButton');
+    sendButton.disabled = true;
+
+    // Send to backend
+    fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            message: message,
+            conversation_id: currentConversationId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Remove loading message
+        removeLoadingMessage(loadingId);
+
+        // Re-enable send button
+        sendButton.disabled = false;
+
+        if (data.success) {
+            addMessageToChat('assistant', data.response, true);
+
+            // Update current conversation ID
+            if (data.conversation_id && !currentConversationId) {
+                currentConversationId = data.conversation_id;
+                loadConversations();
+            }
+        } else {
+            addMessageToChat('error', 'Error: ' + (data.error || 'Unknown error occurred'), true);
+        }
+    })
+    .catch(error => {
+        // Remove loading message
+        removeLoadingMessage(loadingId);
+
+        // Re-enable send button
+        sendButton.disabled = false;
+
+        addMessageToChat('error', 'Network error: ' + error.message, true);
+    });
+}
+
+function addMessageToChat(type, message, scroll = true) {
+    const chatMessages = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+
+    if (type === 'user') {
+        messageDiv.className = 'chat-message user';
+        messageDiv.innerHTML = `
+            <div class="message-icon">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="message-content">
+                <div class="message-text">${escapeHtml(message)}</div>
+            </div>
+        `;
+    } else if (type === 'assistant') {
+        messageDiv.className = 'chat-message assistant';
+        messageDiv.innerHTML = `
+            <div class="message-icon">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div class="message-content">
+                <div class="message-text">${formatAssistantMessage(message)}</div>
+            </div>
+        `;
+    } else if (type === 'error') {
+        messageDiv.className = 'chat-message assistant';
+        messageDiv.innerHTML = `
+            <div class="message-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="message-content">
+                <div class="message-text error">${escapeHtml(message)}</div>
+            </div>
+        `;
+    }
+
+    chatMessages.appendChild(messageDiv);
+
+    if (scroll) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+}
+
+function addLoadingMessage() {
+    const chatMessages = document.getElementById('chatMessages');
+    const loadingDiv = document.createElement('div');
+    const loadingId = 'loading-' + Date.now();
+
+    loadingDiv.id = loadingId;
+    loadingDiv.className = 'chat-message assistant';
+    loadingDiv.innerHTML = `
+        <div class="message-icon">
+            <i class="fas fa-robot"></i>
+        </div>
+        <div class="message-content">
+            <div class="message-text">
+                <div class="loading-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    chatMessages.appendChild(loadingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    return loadingId;
+}
+
+function removeLoadingMessage(loadingId) {
+    const loadingDiv = document.getElementById(loadingId);
+    if (loadingDiv) {
+        loadingDiv.remove();
+    }
+}
+
+function formatAssistantMessage(message) {
+    // Convert markdown-style formatting to HTML
+    let formatted = escapeHtml(message);
+
+    // Parse markdown tables (must be done before line breaks)
+    formatted = parseMarkdownTables(formatted);
+
+    // Bold text **text**
+    formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // Italic text *text*
+    formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // Code blocks `code`
+    formatted = formatted.replace(/`(.+?)`/g, '<code style="background: #f1f3f5; padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>');
+
+    // Lists (- item)
+    formatted = formatted.replace(/^- (.+)$/gm, '• $1');
+
+    // Line breaks (do this last to avoid interfering with table parsing)
+    formatted = formatted.replace(/\n/g, '<br>');
+
+    return formatted;
+}
+
+function parseMarkdownTables(text) {
+    // Regular expression to match markdown tables
+    const tableRegex = /(\|.+\|\n)+/g;
+
+    return text.replace(tableRegex, function(tableText) {
+        const rows = tableText.trim().split('\n');
+        if (rows.length < 2) return tableText;
+
+        let html = '<table class="ai-response-table">';
+
+        // Process each row
+        rows.forEach((row, index) => {
+            // Skip separator row (contains just dashes and pipes)
+            if (row.match(/^\|[\s\-:|]+\|$/)) return;
+
+            const cells = row.split('|').filter(cell => cell.trim() !== '');
+
+            if (index === 0) {
+                // Header row
+                html += '<thead><tr>';
+                cells.forEach(cell => {
+                    html += `<th>${cell.trim()}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+            } else {
+                // Data row
+                html += '<tr>';
+                cells.forEach(cell => {
+                    html += `<td>${cell.trim()}</td>`;
+                });
+                html += '</tr>';
+            }
+        });
+
+        html += '</tbody></table>';
+        return html;
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+
+    return date.toLocaleDateString();
+}
+</script>
+{% endblock %}
