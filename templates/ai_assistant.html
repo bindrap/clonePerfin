@@ -335,6 +335,49 @@
     border-left: 4px solid #c00;
 }
 
+/* AI Response Tables */
+.ai-response-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.ai-response-table thead {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.ai-response-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+}
+
+.ai-response-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.ai-response-table tbody tr {
+    background: white;
+    transition: background 0.2s;
+}
+
+.ai-response-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.ai-response-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
     .chat-card {
@@ -367,6 +410,15 @@
 
     #examplesBody .row > div {
         margin-bottom: 8px;
+    }
+
+    .ai-response-table {
+        font-size: 12px;
+    }
+
+    .ai-response-table th,
+    .ai-response-table td {
+        padding: 8px 10px;
     }
 }
 </style>
@@ -675,14 +727,14 @@ function formatAssistantMessage(message) {
     // Convert markdown-style formatting to HTML
     let formatted = escapeHtml(message);
 
+    // Parse markdown tables (must be done before line breaks)
+    formatted = parseMarkdownTables(formatted);
+
     // Bold text **text**
     formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
     // Italic text *text*
     formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-    // Line breaks
-    formatted = formatted.replace(/\n/g, '<br>');
 
     // Code blocks `code`
     formatted = formatted.replace(/`(.+?)`/g, '<code style="background: #f1f3f5; padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>');
@@ -690,7 +742,49 @@ function formatAssistantMessage(message) {
     // Lists (- item)
     formatted = formatted.replace(/^- (.+)$/gm, '• $1');
 
+    // Line breaks (do this last to avoid interfering with table parsing)
+    formatted = formatted.replace(/\n/g, '<br>');
+
     return formatted;
+}
+
+function parseMarkdownTables(text) {
+    // Regular expression to match markdown tables
+    const tableRegex = /(\|.+\|\n)+/g;
+
+    return text.replace(tableRegex, function(tableText) {
+        const rows = tableText.trim().split('\n');
+        if (rows.length < 2) return tableText;
+
+        let html = '<table class="ai-response-table">';
+
+        // Process each row
+        rows.forEach((row, index) => {
+            // Skip separator row (contains just dashes and pipes)
+            if (row.match(/^\|[\s\-:|]+\|$/)) return;
+
+            const cells = row.split('|').filter(cell => cell.trim() !== '');
+
+            if (index === 0) {
+                // Header row
+                html += '<thead><tr>';
+                cells.forEach(cell => {
+                    html += `<th>${cell.trim()}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+            } else {
+                // Data row
+                html += '<tr>';
+                cells.forEach(cell => {
+                    html += `<td>${cell.trim()}</td>`;
+                });
+                html += '</tr>';
+            }
+        });
+
+        html += '</tbody></table>';
+        return html;
+    });
 }
 
 function escapeHtml(text) {
