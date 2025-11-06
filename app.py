@@ -7,12 +7,18 @@ import pytz
 from functools import wraps
 import subprocess
 import threading
+from ollama import Client
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 
 # Toronto timezone
 TORONTO_TZ = pytz.timezone('America/Toronto')
+
+# Ollama Configuration
+OLLAMA_API_KEY = '1728cbe73f944db7afa1a3c8f52d2f41.GzEVZ8ADdcDHwIxdbvKnqbXy'
+OLLAMA_HOST = 'https://ollama.com'
+OLLAMA_MODEL = 'gpt-oss:120b'
 
 def get_toronto_date():
     """Get current date in Toronto timezone"""
@@ -2368,9 +2374,6 @@ def ai_chat():
     try:
         data = request.get_json()
         user_message = data.get('message', '')
-        ollama_url = data.get('ollama_url', 'https://api.ollama.ai/api/generate')
-        ollama_api_key = data.get('api_key', '')
-        model = data.get('model', 'llama3.2')
 
         if not user_message:
             return jsonify({'error': 'Message is required'}), 400
@@ -2378,8 +2381,17 @@ def ai_chat():
         # Fetch financial context from databases
         context = fetch_financial_context()
 
-        # Build system prompt with context
-        system_prompt = f"""You are a helpful financial assistant for the Perfin app. You have access to the user's financial data and can provide insights, answer questions, and offer advice.
+        # Initialize Ollama client
+        client = Client(
+            host=OLLAMA_HOST,
+            headers={'Authorization': f'Bearer {OLLAMA_API_KEY}'}
+        )
+
+        # Build messages with system context
+        messages = [
+            {
+                'role': 'system',
+                'content': f"""You are a helpful financial assistant for the Perfin app. You have access to the user's financial data and can provide insights, answer questions, and offer advice.
 
 Available Data Context:
 {context}
@@ -2390,50 +2402,25 @@ Instructions:
 - Be conversational and friendly
 - If you don't have enough data to answer, say so
 - Offer suggestions for improving financial habits when appropriate
-- Format numbers as currency when relevant (e.g., $1,234.56)
+- Format numbers as currency when relevant (e.g., $1,234.56)"""
+            },
+            {
+                'role': 'user',
+                'content': user_message
+            }
+        ]
 
-Answer the user's question based on their financial data."""
+        # Call Ollama API with streaming
+        response_text = ''
+        for part in client.chat(OLLAMA_MODEL, messages=messages, stream=True):
+            response_text += part['message']['content']
 
-        # Prepare Ollama API request
-        ollama_payload = {
-            'model': model,
-            'prompt': f"{system_prompt}\n\nUser Question: {user_message}\n\nAssistant:",
-            'stream': False
-        }
-
-        headers = {
-            'Content-Type': 'application/json'
-        }
-
-        # Add API key if provided
-        if ollama_api_key:
-            headers['Authorization'] = f'Bearer {ollama_api_key}'
-
-        # Call Ollama API
-        response = requests.post(ollama_url, json=ollama_payload, headers=headers, timeout=60)
-
-        if response.status_code == 200:
-            result = response.json()
-            ai_response = result.get('response', 'No response from AI')
-
-            return jsonify({
-                'success': True,
-                'response': ai_response,
-                'model': model
-            })
-        else:
-            error_msg = f"Ollama API error: {response.status_code} - {response.text}"
-            print(error_msg)
-            return jsonify({
-                'success': False,
-                'error': error_msg
-            }), 500
-
-    except requests.exceptions.Timeout:
         return jsonify({
-            'success': False,
-            'error': 'Request timed out. Please try again.'
-        }), 504
+            'success': True,
+            'response': response_text,
+            'model': OLLAMA_MODEL
+        })
+
     except Exception as e:
         error_msg = f"Error in AI chat: {str(e)}"
         print(error_msg)
