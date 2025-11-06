@@ -662,62 +662,78 @@ def analytics():
     ''', (ninety_days_ago,))
     weekly_trends = cursor.fetchall()
     
-    # Smoking and Drinking Analytics
-    # Get total days tracked and smoking/drinking stats
+    # Personal Activities Analytics
+    # Get total days tracked and activity stats
     cursor.execute('''
-        SELECT 
+        SELECT
             COUNT(*) as total_days_tracked,
-            SUM(smoking) as total_smoking_days,
-            SUM(drinking) as total_drinking_days
+            SUM(gym) as total_gym_days,
+            SUM(jiu_jitsu) as total_jj_days,
+            SUM(skateboarding) as total_skate_days,
+            SUM(supplements) as total_supplement_days
         FROM personal_log
     ''')
     habits_stats = cursor.fetchone()
-    
+
     # Calculate percentages
     total_tracked = habits_stats['total_days_tracked'] if habits_stats['total_days_tracked'] > 0 else 1
-    smoking_percentage = (habits_stats['total_smoking_days'] / total_tracked) * 100 if habits_stats['total_smoking_days'] else 0
-    drinking_percentage = (habits_stats['total_drinking_days'] / total_tracked) * 100 if habits_stats['total_drinking_days'] else 0
-    
+    gym_percentage = (habits_stats['total_gym_days'] / total_tracked) * 100 if habits_stats['total_gym_days'] else 0
+    jj_percentage = (habits_stats['total_jj_days'] / total_tracked) * 100 if habits_stats['total_jj_days'] else 0
+    skate_percentage = (habits_stats['total_skate_days'] / total_tracked) * 100 if habits_stats['total_skate_days'] else 0
+    supplement_percentage = (habits_stats['total_supplement_days'] / total_tracked) * 100 if habits_stats['total_supplement_days'] else 0
+
     # Get spending on LCBO (alcohol) and Dispo (cannabis)
     cursor.execute('''
-        SELECT 
-            SUM(CASE WHEN LOWER(item) LIKE '%lcbo%' OR LOWER(item) LIKE '%alcohol%' 
-                     OR LOWER(item) LIKE '%beer%' OR LOWER(item) LIKE '%wine%' 
+        SELECT
+            SUM(CASE WHEN LOWER(item) LIKE '%lcbo%' OR LOWER(item) LIKE '%alcohol%'
+                     OR LOWER(item) LIKE '%beer%' OR LOWER(item) LIKE '%wine%'
                      OR LOWER(item) LIKE '%liquor%' THEN price ELSE 0 END) as lcbo_spending,
-            SUM(CASE WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%cannabis%' 
+            SUM(CASE WHEN LOWER(item) LIKE '%dispo%' OR LOWER(item) LIKE '%cannabis%'
                      OR LOWER(item) LIKE '%weed%' OR LOWER(item) LIKE '%dispensary%' THEN price ELSE 0 END) as dispo_spending
         FROM spending_log
         WHERE date >= ?
     ''', (thirty_days_ago,))
     substance_spending = cursor.fetchone()
-    
-    # Get recent 30 days smoking/drinking patterns
+
+    # Get recent 30 days activity patterns
     cursor.execute('''
-        SELECT 
-            SUM(smoking) as smoking_days_30,
-            SUM(drinking) as drinking_days_30,
+        SELECT
+            SUM(gym) as gym_days_30,
+            SUM(jiu_jitsu) as jj_days_30,
+            SUM(skateboarding) as skate_days_30,
+            SUM(supplements) as supplement_days_30,
             COUNT(*) as tracked_days_30
         FROM personal_log
         WHERE date >= ?
     ''', (thirty_days_ago,))
     recent_habits = cursor.fetchone()
-    
+
     # Calculate recent percentages
     recent_tracked = recent_habits['tracked_days_30'] if recent_habits['tracked_days_30'] > 0 else 1
-    recent_smoking_percentage = (recent_habits['smoking_days_30'] / recent_tracked) * 100 if recent_habits['smoking_days_30'] else 0
-    recent_drinking_percentage = (recent_habits['drinking_days_30'] / recent_tracked) * 100 if recent_habits['drinking_days_30'] else 0
-    
+    recent_gym_percentage = (recent_habits['gym_days_30'] / recent_tracked) * 100 if recent_habits['gym_days_30'] else 0
+    recent_jj_percentage = (recent_habits['jj_days_30'] / recent_tracked) * 100 if recent_habits['jj_days_30'] else 0
+    recent_skate_percentage = (recent_habits['skate_days_30'] / recent_tracked) * 100 if recent_habits['skate_days_30'] else 0
+    recent_supplement_percentage = (recent_habits['supplement_days_30'] / recent_tracked) * 100 if recent_habits['supplement_days_30'] else 0
+
     # Create habits analytics data
     habits_analytics = {
         'total_days_tracked': habits_stats['total_days_tracked'],
-        'total_smoking_days': habits_stats['total_smoking_days'] or 0,
-        'total_drinking_days': habits_stats['total_drinking_days'] or 0,
-        'smoking_percentage': smoking_percentage,
-        'drinking_percentage': drinking_percentage,
-        'recent_smoking_days': recent_habits['smoking_days_30'] or 0,
-        'recent_drinking_days': recent_habits['drinking_days_30'] or 0,
-        'recent_smoking_percentage': recent_smoking_percentage,
-        'recent_drinking_percentage': recent_drinking_percentage,
+        'total_gym_days': habits_stats['total_gym_days'] or 0,
+        'total_jj_days': habits_stats['total_jj_days'] or 0,
+        'total_skate_days': habits_stats['total_skate_days'] or 0,
+        'total_supplement_days': habits_stats['total_supplement_days'] or 0,
+        'gym_percentage': gym_percentage,
+        'jj_percentage': jj_percentage,
+        'skate_percentage': skate_percentage,
+        'supplement_percentage': supplement_percentage,
+        'recent_gym_days': recent_habits['gym_days_30'] or 0,
+        'recent_jj_days': recent_habits['jj_days_30'] or 0,
+        'recent_skate_days': recent_habits['skate_days_30'] or 0,
+        'recent_supplement_days': recent_habits['supplement_days_30'] or 0,
+        'recent_gym_percentage': recent_gym_percentage,
+        'recent_jj_percentage': recent_jj_percentage,
+        'recent_skate_percentage': recent_skate_percentage,
+        'recent_supplement_percentage': recent_supplement_percentage,
         'lcbo_spending_30days': substance_spending['lcbo_spending'] or 0,
         'dispo_spending_30days': substance_spending['dispo_spending'] or 0,
         'tracked_days_30': recent_habits['tracked_days_30']
