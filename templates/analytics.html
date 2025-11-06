@@ -95,7 +95,7 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header bg-dark text-white">
-                <h5><i class="fas fa-smoking"></i> Smoking & Drinking Habits Analytics</h5>
+                <h5><i class="fas fa-dumbbell"></i> Personal Activities Analytics</h5>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -105,37 +105,65 @@
                         <div class="row">
                             <div class="col-6">
                                 <div class="analytics-metric">
-                                    <h4 class="text-warning">{{ habits_analytics.total_smoking_days }}</h4>
-                                    <small>Days Smoked</small>
-                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.smoking_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
+                                    <h4 class="text-primary">{{ habits_analytics.total_gym_days }}</h4>
+                                    <small>💪 Gym Sessions</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.gym_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="analytics-metric">
-                                    <h4 class="text-info">{{ habits_analytics.total_drinking_days }}</h4>
-                                    <small>Days Drank</small>
-                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.drinking_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
+                                    <h4 class="text-success">{{ habits_analytics.total_jj_days }}</h4>
+                                    <small>🥋 Jiu Jitsu</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.jj_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
+                                </div>
+                            </div>
+                            <div class="col-6 mt-3">
+                                <div class="analytics-metric">
+                                    <h4 class="text-warning">{{ habits_analytics.total_skate_days }}</h4>
+                                    <small>🛹 Skateboarding</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.skate_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
+                                </div>
+                            </div>
+                            <div class="col-6 mt-3">
+                                <div class="analytics-metric">
+                                    <h4 class="text-info">{{ habits_analytics.total_supplement_days }}</h4>
+                                    <small>💊 Supplements</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.supplement_percentage) }}% of {{ habits_analytics.total_days_tracked }} tracked days</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Recent 30 Days -->
                     <div class="col-md-6 mb-4">
                         <h6 class="text-success"><i class="fas fa-calendar-month"></i> Last 30 Days</h6>
                         <div class="row">
                             <div class="col-6">
                                 <div class="analytics-metric">
-                                    <h4 class="text-warning">{{ habits_analytics.recent_smoking_days }}</h4>
-                                    <small>Days Smoked</small>
-                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_smoking_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
+                                    <h4 class="text-primary">{{ habits_analytics.recent_gym_days }}</h4>
+                                    <small>💪 Gym Sessions</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_gym_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="analytics-metric">
-                                    <h4 class="text-info">{{ habits_analytics.recent_drinking_days }}</h4>
-                                    <small>Days Drank</small>
-                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_drinking_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
+                                    <h4 class="text-success">{{ habits_analytics.recent_jj_days }}</h4>
+                                    <small>🥋 Jiu Jitsu</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_jj_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
+                                </div>
+                            </div>
+                            <div class="col-6 mt-3">
+                                <div class="analytics-metric">
+                                    <h4 class="text-warning">{{ habits_analytics.recent_skate_days }}</h4>
+                                    <small>🛹 Skateboarding</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_skate_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
+                                </div>
+                            </div>
+                            <div class="col-6 mt-3">
+                                <div class="analytics-metric">
+                                    <h4 class="text-info">{{ habits_analytics.recent_supplement_days }}</h4>
+                                    <small>💊 Supplements</small>
+                                    <div class="text-muted small">{{ "%.1f"|format(habits_analytics.recent_supplement_percentage) }}% of {{ habits_analytics.tracked_days_30 }} days</div>
                                 </div>
                             </div>
                         </div>
