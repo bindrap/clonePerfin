@@ -2635,7 +2635,7 @@ SPENDING DATA (Last 30 Days):
         try:
             cursor.execute('''
                 SELECT date, gym, jiu_jitsu, skateboarding, work, coitus,
-                       sauna, supplements, smoking, drinking, notes
+                       sauna, supplements, notes
                 FROM personal_log
                 ORDER BY date DESC
             ''')
@@ -2644,14 +2644,14 @@ SPENDING DATA (Last 30 Days):
             if personal_data:
                 activity_counts = {
                     'gym': 0, 'jiu_jitsu': 0, 'skateboarding': 0, 'work': 0,
-                    'coitus': 0, 'sauna': 0, 'supplements': 0, 'smoking': 0, 'drinking': 0
+                    'coitus': 0, 'sauna': 0, 'supplements': 0
                 }
 
                 # Build detailed activity log with dates
                 activity_details = []
-                smoking_dates = []
                 jj_dates = []
                 gym_dates = []
+                skateboarding_dates = []
 
                 for row in personal_data:
                     day_activities = []
@@ -2666,6 +2666,7 @@ SPENDING DATA (Last 30 Days):
                     if row['skateboarding']:
                         activity_counts['skateboarding'] += 1
                         day_activities.append('Skateboarding')
+                        skateboarding_dates.append(row['date'])
                     if row['work']:
                         activity_counts['work'] += 1
                         day_activities.append('Work')
@@ -2675,13 +2676,6 @@ SPENDING DATA (Last 30 Days):
                     if row['supplements']:
                         activity_counts['supplements'] += 1
                         day_activities.append('Supplements')
-                    if row['smoking']:
-                        activity_counts['smoking'] += 1
-                        day_activities.append('Smoking')
-                        smoking_dates.append(row['date'])
-                    if row['drinking']:
-                        activity_counts['drinking'] += 1
-                        day_activities.append('Drinking')
 
                     if day_activities:
                         activity_details.append(f"{row['date']}: {', '.join(day_activities)}")
@@ -2703,20 +2697,18 @@ LIFETIME TOTALS:
 - Work Days: {activity_counts['work']} days
 - Sauna Sessions: {activity_counts['sauna']} times
 - Supplements Taken: {activity_counts['supplements']} days
-- Smoking Instances: {activity_counts['smoking']} times
-- Drinking Instances: {activity_counts['drinking']} times
 
 DETAILED ACTIVITY LOG (Most Recent 30 Days):
 {chr(10).join(activity_details[:30])}
 
-COMPLETE SMOKING DATES (for 2025 and all time):
-{', '.join(smoking_dates) if smoking_dates else 'No smoking recorded'}
+ALL JIU JITSU DATES (Complete List - for analyzing patterns):
+{', '.join(jj_dates) if jj_dates else 'No jiu jitsu sessions recorded'}
 
-COMPLETE JIU JITSU DATES (All Time):
-{', '.join(jj_dates[:50]) if jj_dates else 'No jiu jitsu recorded'}... (showing first 50)
+ALL GYM DATES (Complete List - for analyzing patterns):
+{', '.join(gym_dates) if gym_dates else 'No gym sessions recorded'}
 
-COMPLETE GYM DATES (All Time):
-{', '.join(gym_dates[:50]) if gym_dates else 'No gym recorded'}... (showing first 50)
+ALL SKATEBOARDING DATES (Complete List):
+{', '.join(skateboarding_dates) if skateboarding_dates else 'No skateboarding sessions recorded'}
 """)
             else:
                 context_parts.append("\nPERSONAL ACTIVITIES: No activity records found\n")
@@ -2780,14 +2772,21 @@ ETF PORTFOLIO:
             condo_config = cursor.fetchone()
 
             if condo_config:
+                mortgage = float(condo_config['mortgage'])
+                condo_fee = float(condo_config['condo_fee'])
+                property_tax = float(condo_config['property_tax'])
+                rent_amount = float(condo_config['rent_amount'])
+                monthly_costs = mortgage + condo_fee + (property_tax/12)
+                net_monthly = rent_amount - monthly_costs
+
                 context_parts.append(f"""
 CONDO FINANCES:
-- Mortgage Payment: ${condo_config['mortgage_payment']:.2f}
-- Condo Fee: ${condo_config['condo_fee']:.2f}
-- Annual Property Tax: ${condo_config['property_tax']:.2f}
-- Rent Income: ${condo_config['rent_amount']:.2f}
-- Monthly Costs: ${condo_config['mortgage_payment'] + condo_config['condo_fee'] + (condo_config['property_tax']/12):.2f}
-- Net Monthly (Rent - Costs): ${condo_config['rent_amount'] - (condo_config['mortgage_payment'] + condo_config['condo_fee'] + condo_config['property_tax']/12):.2f}
+- Mortgage Payment: ${mortgage:.2f}
+- Condo Fee: ${condo_fee:.2f}
+- Annual Property Tax: ${property_tax:.2f}
+- Rent Income: ${rent_amount:.2f}
+- Monthly Costs: ${monthly_costs:.2f}
+- Net Monthly (Rent - Costs): ${net_monthly:.2f}
 """)
             else:
                 context_parts.append("\nCONDO FINANCES: No condo config found\n")
@@ -2803,11 +2802,23 @@ CONDO FINANCES:
             savings_config = cursor.fetchone()
 
             if savings_config:
+                biweekly_income = float(savings_config['biweekly_income'])
+                savings_pct = float(savings_config['savings_percentage'])
+                investorline_pct = float(savings_config['investorline_percentage'])
+                usd_pct = float(savings_config['usd_percentage'])
+
+                savings_amount = biweekly_income * (savings_pct / 100)
+                investorline_amount = biweekly_income * (investorline_pct / 100)
+                usd_amount = biweekly_income * (usd_pct / 100)
+
                 context_parts.append(f"""
-SAVINGS:
-- Current Savings: ${savings_config['current_savings']:.2f}
-- Annual Savings Goal: ${savings_config['annual_savings_goal']:.2f}
-- Months to Reach Goal: {savings_config['months_to_reach_goal']}
+SAVINGS CONFIGURATION:
+- Biweekly Income: ${biweekly_income:.2f}
+- Savings Percentage: {savings_pct}% (${savings_amount:.2f} per paycheck)
+- Investorline Percentage: {investorline_pct}% (${investorline_amount:.2f} per paycheck)
+- USD Percentage: {usd_pct}% (${usd_amount:.2f} per paycheck)
+- Total Allocated Per Paycheck: ${savings_amount + investorline_amount + usd_amount:.2f}
+- Annual Savings Projection: ${(savings_amount + investorline_amount + usd_amount) * 26:.2f}
 """)
             else:
                 context_parts.append("\nSAVINGS: No savings config found\n")
