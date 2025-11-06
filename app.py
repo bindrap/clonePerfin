@@ -2184,7 +2184,9 @@ def override_pay_period():
 @app.route('/condo')
 @app.route('/condo/<int:year>')
 def condo(year=None):
-    """Condo property management page"""
+    """Condo property management page with mid-year lease term support"""
+    from datetime import date
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -2192,36 +2194,61 @@ def condo(year=None):
     if year is None:
         year = get_toronto_date().year
 
-    # Get condo configuration for the specified year
-    cursor.execute('SELECT * FROM condo_config WHERE year = ?', (year,))
-    config = cursor.fetchone()
+    # Get ALL condo configurations for the specified year (can have multiple per year now)
+    cursor.execute('''
+        SELECT * FROM condo_config
+        WHERE year = ?
+        ORDER BY effective_date
+    ''', (year,))
+    all_configs = cursor.fetchall()
 
-    if not config:
+    if not all_configs:
         # Get the most recent config as template
-        cursor.execute('SELECT * FROM condo_config ORDER BY year DESC LIMIT 1')
+        cursor.execute('SELECT * FROM condo_config ORDER BY year DESC, effective_date DESC LIMIT 1')
         latest_config = cursor.fetchone()
 
         if latest_config:
             # Create new config for this year based on latest
             cursor.execute('''
-                INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount, year)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount, year, effective_date)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (latest_config['mortgage'], latest_config['condo_fee'],
-                  latest_config['property_tax'], latest_config['rent_amount'], year))
+                  latest_config['property_tax'], latest_config['rent_amount'], year, f'{year}-01-01'))
         else:
             # Create default configuration
             cursor.execute('''
-                INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount, year)
-                VALUES (1375.99, 427.35, 203.98, 2000.00, ?)
-            ''', (year,))
+                INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount, year, effective_date)
+                VALUES (1375.99, 427.35, 203.98, 2000.00, ?, ?)
+            ''', (year, f'{year}-01-01'))
         conn.commit()
-        cursor.execute('SELECT * FROM condo_config WHERE year = ?', (year,))
-        config = cursor.fetchone()
+        cursor.execute('SELECT * FROM condo_config WHERE year = ? ORDER BY effective_date', (year,))
+        all_configs = cursor.fetchall()
 
-    # Calculate total expenses
-    total_expenses = float(config['mortgage']) + float(config['condo_fee']) + float(config['property_tax'])
-    revenue = float(config['rent_amount']) - total_expenses
-    yearly_revenue = revenue * 12
+    # Function to get active config for a specific month
+    def get_config_for_month(month_num):
+        """Return the config that's active for a given month"""
+        target_date = date(year, month_num, 1)
+        active_config = all_configs[0]  # Default to first
+        for cfg in all_configs:
+            cfg_date = datetime.strptime(cfg['effective_date'], '%Y-%m-%d').date()
+            if cfg_date <= target_date:
+                active_config = cfg
+            else:
+                break
+        return active_config
+
+    # Calculate yearly revenue based on which config applies to each month
+    yearly_revenue = 0
+    for month in range(1, 13):
+        cfg = get_config_for_month(month)
+        month_expenses = float(cfg['mortgage']) + float(cfg['condo_fee']) + float(cfg['property_tax'])
+        month_revenue = float(cfg['rent_amount']) - month_expenses
+        yearly_revenue += month_revenue
+
+    # Use the most recent config for display in the overview card
+    current_config = all_configs[-1]
+    total_expenses = float(current_config['mortgage']) + float(current_config['condo_fee']) + float(current_config['property_tax'])
+    revenue = float(current_config['rent_amount']) - total_expenses
 
     # Get monthly tracking data for specified year
     cursor.execute('''
@@ -2257,7 +2284,8 @@ def condo(year=None):
     conn.close()
 
     return render_template('condo.html',
-                         config=config,
+                         config=current_config,
+                         all_configs=all_configs,
                          total_expenses=total_expenses,
                          revenue=revenue,
                          yearly_revenue=yearly_revenue,
@@ -2268,41 +2296,79 @@ def condo(year=None):
                          available_years=available_years,
                          today=get_toronto_date())
 
-@app.route('/condo/update_config', methods=['POST'])
-@app.route('/condo/<int:year>/update_config', methods=['POST'])
-def update_condo_config(year=None):
-    """Update condo configuration for a specific year"""
+@app.route('/condo/update_config/<int:config_id>', methods=['POST'])
+def update_condo_config(config_id):
+    """Update an existing condo configuration"""
     try:
         mortgage = float(request.form.get('mortgage', 0))
         condo_fee = float(request.form.get('condo_fee', 0))
         property_tax = float(request.form.get('property_tax', 0))
         rent_amount = float(request.form.get('rent_amount', 0))
 
-        if year is None:
-            year = get_toronto_date().year
-
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Update existing config for this year
+        # Get the year of this config for redirect
+        cursor.execute('SELECT year FROM condo_config WHERE id = ?', (config_id,))
+        result = cursor.fetchone()
+        year = result['year'] if result else get_toronto_date().year
+
+        # Update existing config
         cursor.execute('''
             UPDATE condo_config
             SET mortgage = ?, condo_fee = ?, property_tax = ?, rent_amount = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE year = ?
-        ''', (mortgage, condo_fee, property_tax, rent_amount, year))
+            WHERE id = ?
+        ''', (mortgage, condo_fee, property_tax, rent_amount, config_id))
 
         conn.commit()
         conn.close()
 
-        flash('Condo configuration updated successfully!', 'success')
+        flash('Lease terms updated successfully!', 'success')
         return redirect(url_for('condo', year=year))
 
     except ValueError:
         flash('Please enter valid numeric values', 'error')
-        return redirect(url_for('condo', year=year if year else get_toronto_date().year))
+        return redirect(url_for('condo'))
     except Exception as e:
         flash(f'Error updating configuration: {str(e)}', 'error')
-        return redirect(url_for('condo', year=year if year else get_toronto_date().year))
+        return redirect(url_for('condo'))
+
+@app.route('/condo/<int:year>/add_lease_term', methods=['POST'])
+def add_lease_term(year):
+    """Add a new lease term starting at a specific month"""
+    try:
+        mortgage = float(request.form.get('mortgage', 0))
+        condo_fee = float(request.form.get('condo_fee', 0))
+        property_tax = float(request.form.get('property_tax', 0))
+        rent_amount = float(request.form.get('rent_amount', 0))
+        start_month = int(request.form.get('start_month', 1))
+
+        # Create effective date (first day of the specified month)
+        effective_date = f'{year}-{start_month:02d}-01'
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Insert new configuration
+        cursor.execute('''
+            INSERT INTO condo_config (mortgage, condo_fee, property_tax, rent_amount, year, effective_date)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (mortgage, condo_fee, property_tax, rent_amount, year, effective_date))
+
+        conn.commit()
+        conn.close()
+
+        month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                      'July', 'August', 'September', 'October', 'November', 'December']
+        flash(f'New lease terms added starting {month_names[start_month]} {year}!', 'success')
+        return redirect(url_for('condo', year=year))
+
+    except ValueError:
+        flash('Please enter valid numeric values', 'error')
+        return redirect(url_for('condo', year=year))
+    except Exception as e:
+        flash(f'Error adding lease term: {str(e)}', 'error')
+        return redirect(url_for('condo', year=year))
 
 @app.route('/condo/update_monthly/<int:year>/<int:month>', methods=['POST'])
 def update_monthly_data(year, month):
