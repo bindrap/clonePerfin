@@ -2841,19 +2841,24 @@ ETF PORTFOLIO:
             if condo_config:
                 mortgage = float(condo_config['mortgage'])
                 condo_fee = float(condo_config['condo_fee'])
-                property_tax = float(condo_config['property_tax'])
+                property_tax_monthly = float(condo_config['property_tax'])  # Already monthly amount
                 rent_amount = float(condo_config['rent_amount'])
-                monthly_costs = mortgage + condo_fee + (property_tax/12)
+                monthly_costs = mortgage + condo_fee + property_tax_monthly
                 net_monthly = rent_amount - monthly_costs
+                annual_property_tax = property_tax_monthly * 12
 
                 context_parts.append(f"""
 CONDO FINANCES:
-- Mortgage Payment: ${mortgage:.2f}
-- Condo Fee: ${condo_fee:.2f}
-- Annual Property Tax: ${property_tax:.2f}
-- Rent Income: ${rent_amount:.2f}
-- Monthly Costs: ${monthly_costs:.2f}
-- Net Monthly (Rent - Costs): ${net_monthly:.2f}
+- Mortgage Payment (monthly): ${mortgage:.2f}
+- Condo Fee (monthly): ${condo_fee:.2f}
+- Property Tax (monthly): ${property_tax_monthly:.2f}
+- Property Tax (annual): ${annual_property_tax:.2f}
+- Rent Income (monthly): ${rent_amount:.2f}
+- Total Monthly Costs (Mortgage + Condo Fee + Property Tax): ${monthly_costs:.2f}
+- Net Monthly Income (Rent - Total Costs): ${net_monthly:.2f}
+- Net Annual Income: ${net_monthly * 12:.2f}
+
+IMPORTANT: Property tax is ${property_tax_monthly:.2f} PER MONTH, which equals ${annual_property_tax:.2f} per year.
 """)
             else:
                 context_parts.append("\nCONDO FINANCES: No condo config found\n")
