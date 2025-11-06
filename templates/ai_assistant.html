@@ -10,68 +10,76 @@
     </div>
 </div>
 
-<!-- Example Questions Card -->
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="card">
+<div class="row">
+    <!-- Conversation History Sidebar -->
+    <div class="col-md-3 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="fas fa-history"></i> Conversations</h6>
+            </div>
+            <div class="card-body p-0">
+                <button class="btn btn-success w-100 rounded-0" onclick="startNewConversation()">
+                    <i class="fas fa-plus"></i> New Chat
+                </button>
+                <div id="conversationList" class="conversation-list">
+                    <div class="text-center p-3 text-muted">
+                        <i class="fas fa-spinner fa-spin"></i> Loading...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="col-md-9">
+        <!-- Example Questions Card (Collapsible) -->
+        <div class="card mb-3" id="examplesCard">
             <div class="card-header bg-success text-white">
                 <button class="btn btn-sm btn-light float-end" onclick="toggleExamples()" id="toggleExamplesBtn">
                     <i class="fas fa-chevron-up"></i>
                 </button>
-                <h5><i class="fas fa-lightbulb"></i> Example Questions</h5>
+                <h6 class="mb-0"><i class="fas fa-lightbulb"></i> Example Questions</h6>
             </div>
-            <div class="card-body" id="examplesBody">
+            <div class="card-body py-2" id="examplesBody">
                 <div class="row">
-                    <div class="col-md-3">
-                        <h6 class="text-primary">💰 Spending</h6>
+                    <div class="col-md-3 col-6 mb-2">
+                        <small class="text-primary fw-bold">💰 Spending</small>
                         <div class="d-flex flex-column gap-1">
                             <button class="btn btn-sm btn-outline-primary text-start" onclick="askQuestion('What did I spend the most on this month?')">
-                                What did I spend the most on?
+                                What did I spend most on?
                             </button>
                             <button class="btn btn-sm btn-outline-primary text-start" onclick="askQuestion('How much did I spend on food?')">
                                 How much on food?
                             </button>
-                            <button class="btn btn-sm btn-outline-primary text-start" onclick="askQuestion('What are my top 5 categories?')">
-                                Top 5 categories?
-                            </button>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <h6 class="text-success">💪 Personal Habits</h6>
+                    <div class="col-md-3 col-6 mb-2">
+                        <small class="text-success fw-bold">💪 Personal Habits</small>
                         <div class="d-flex flex-column gap-1">
-                            <button class="btn btn-sm btn-outline-success text-start" onclick="askQuestion('How often did I go to the gym?')">
-                                How often gym?
+                            <button class="btn btn-sm btn-outline-success text-start" onclick="askQuestion('How many times did I go to the gym in September?')">
+                                Gym in September?
                             </button>
-                            <button class="btn btn-sm btn-outline-success text-start" onclick="askQuestion('What are my most consistent activities?')">
-                                Most consistent activities?
-                            </button>
-                            <button class="btn btn-sm btn-outline-success text-start" onclick="askQuestion('How can I improve my health habits?')">
-                                Improve health habits?
+                            <button class="btn btn-sm btn-outline-success text-start" onclick="askQuestion('Compare my gym vs jiu jitsu frequency')">
+                                Gym vs Jiu Jitsu?
                             </button>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <h6 class="text-info">📈 Portfolio</h6>
+                    <div class="col-md-3 col-6 mb-2">
+                        <small class="text-info fw-bold">📈 Portfolio</small>
                         <div class="d-flex flex-column gap-1">
                             <button class="btn btn-sm btn-outline-info text-start" onclick="askQuestion('How is my portfolio performing?')">
                                 Portfolio performance?
-                            </button>
-                            <button class="btn btn-sm btn-outline-info text-start" onclick="askQuestion('What is my profit or loss?')">
-                                Current profit/loss?
                             </button>
                             <button class="btn btn-sm btn-outline-info text-start" onclick="askQuestion('Should I rebalance my portfolio?')">
                                 Rebalance portfolio?
                             </button>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <h6 class="text-warning">🏠 Condo & Savings</h6>
+                    <div class="col-md-3 col-6 mb-2">
+                        <small class="text-warning fw-bold">🏠 Condo & More</small>
                         <div class="d-flex flex-column gap-1">
                             <button class="btn btn-sm btn-outline-warning text-start" onclick="askQuestion('What is my net monthly condo income?')">
                                 Condo net income?
-                            </button>
-                            <button class="btn btn-sm btn-outline-warning text-start" onclick="askQuestion('Am I on track with my savings goals?')">
-                                Savings goal progress?
                             </button>
                             <button class="btn btn-sm btn-outline-warning text-start" onclick="askQuestion('Give me a complete financial overview')">
                                 Complete overview?
@@ -81,12 +89,8 @@
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- Chat Container - ChatGPT Style -->
-<div class="row">
-    <div class="col-12">
+        <!-- Chat Container - ChatGPT Style -->
         <div class="card chat-card">
             <div class="card-body p-0">
                 <div id="chatMessages" class="chat-messages">
@@ -96,8 +100,8 @@
                         </div>
                         <div class="message-content">
                             <div class="message-text">
-                                Hello! I'm your AI financial assistant. I have access to your spending data, personal activities,
-                                portfolio information, condo finances, and savings goals. Ask me anything! 💡
+                                Hello! I'm your AI financial assistant with direct access to your database. I can see your spending, personal activities,
+                                portfolio, condo finances, and savings. Ask me anything! 💡
                             </div>
                         </div>
                     </div>
@@ -121,9 +125,69 @@
 </div>
 
 <style>
+/* Conversation List Styling */
+.conversation-list {
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+}
+
+.conversation-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    cursor: pointer;
+    transition: background 0.2s;
+    position: relative;
+}
+
+.conversation-item:hover {
+    background: #f8f9fa;
+}
+
+.conversation-item.active {
+    background: #e7f3ff;
+    border-left: 3px solid #007bff;
+}
+
+.conversation-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conversation-date {
+    font-size: 11px;
+    color: #6c757d;
+}
+
+.conversation-delete {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #dc3545;
+    color: white;
+    border: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.conversation-item:hover .conversation-delete {
+    opacity: 1;
+}
+
 /* Chat Card Styling */
 .chat-card {
-    height: calc(100vh - 380px);
+    height: calc(100vh - 280px);
     min-height: 500px;
     display: flex;
     flex-direction: column;
@@ -274,8 +338,12 @@
 /* Mobile Responsive */
 @media (max-width: 768px) {
     .chat-card {
-        height: calc(100vh - 320px);
+        height: calc(100vh - 360px);
         min-height: 400px;
+    }
+
+    .conversation-list {
+        max-height: 200px;
     }
 
     .chat-messages {
@@ -297,25 +365,27 @@
         font-size: 16px;
     }
 
-    .input-container {
-        padding: 12px;
-        gap: 8px;
-    }
-
-    .chat-input {
-        font-size: 14px;
-        padding: 10px 16px;
-    }
-
-    .send-button {
-        width: 44px;
-        height: 44px;
+    #examplesBody .row > div {
+        margin-bottom: 8px;
     }
 }
 </style>
 
 <script>
 let isExamplesVisible = true;
+let currentConversationId = null;
+
+// Load conversations on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadConversations();
+
+    // Auto-resize textarea
+    const textarea = document.getElementById('userMessage');
+    textarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+});
 
 function toggleExamples() {
     isExamplesVisible = !isExamplesVisible;
@@ -329,6 +399,118 @@ function toggleExamples() {
         body.style.display = 'none';
         btn.innerHTML = '<i class="fas fa-chevron-down"></i>';
     }
+}
+
+function loadConversations() {
+    fetch('/api/ai/conversations')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayConversations(data.conversations);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading conversations:', error);
+        });
+}
+
+function displayConversations(conversations) {
+    const listEl = document.getElementById('conversationList');
+
+    if (conversations.length === 0) {
+        listEl.innerHTML = '<div class="text-center p-3 text-muted">No conversations yet</div>';
+        return;
+    }
+
+    listEl.innerHTML = conversations.map(conv => `
+        <div class="conversation-item ${conv.id === currentConversationId ? 'active' : ''}"
+             onclick="loadConversation(${conv.id})">
+            <button class="conversation-delete" onclick="event.stopPropagation(); deleteConversation(${conv.id})">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="conversation-title">${escapeHtml(conv.title)}</div>
+            <div class="conversation-date">${formatDate(conv.updated_at)}</div>
+        </div>
+    `).join('');
+}
+
+function loadConversation(conversationId) {
+    fetch(`/api/ai/conversation/${conversationId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentConversationId = conversationId;
+                displayLoadedConversation(data.messages);
+                updateActiveConversation(conversationId);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading conversation:', error);
+        });
+}
+
+function displayLoadedConversation(messages) {
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '';
+
+    messages.forEach(msg => {
+        addMessageToChat(msg.role, msg.content, false);
+    });
+}
+
+function updateActiveConversation(conversationId) {
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.remove('active');
+    });
+
+    const activeItem = Array.from(document.querySelectorAll('.conversation-item'))
+        .find(item => item.getAttribute('onclick').includes(`loadConversation(${conversationId})`));
+
+    if (activeItem) {
+        activeItem.classList.add('active');
+    }
+}
+
+function startNewConversation() {
+    currentConversationId = null;
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = `
+        <div class="chat-message assistant">
+            <div class="message-icon">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div class="message-content">
+                <div class="message-text">
+                    Hello! I'm your AI financial assistant with direct access to your database. I can see your spending, personal activities,
+                    portfolio, condo finances, and savings. Ask me anything! 💡
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.remove('active');
+    });
+}
+
+function deleteConversation(conversationId) {
+    if (!confirm('Delete this conversation?')) return;
+
+    fetch(`/api/ai/conversation/${conversationId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (currentConversationId === conversationId) {
+                startNewConversation();
+            }
+            loadConversations();
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting conversation:', error);
+    });
 }
 
 function askQuestion(question) {
@@ -356,7 +538,7 @@ function sendMessage() {
     if (!message) return;
 
     // Add user message to chat
-    addMessageToChat('user', message);
+    addMessageToChat('user', message, true);
 
     // Clear input
     messageInput.value = '';
@@ -376,7 +558,8 @@ function sendMessage() {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            message: message
+            message: message,
+            conversation_id: currentConversationId
         })
     })
     .then(response => response.json())
@@ -388,9 +571,15 @@ function sendMessage() {
         sendButton.disabled = false;
 
         if (data.success) {
-            addMessageToChat('assistant', data.response);
+            addMessageToChat('assistant', data.response, true);
+
+            // Update current conversation ID
+            if (data.conversation_id && !currentConversationId) {
+                currentConversationId = data.conversation_id;
+                loadConversations();
+            }
         } else {
-            addMessageToChat('error', 'Error: ' + (data.error || 'Unknown error occurred'));
+            addMessageToChat('error', 'Error: ' + (data.error || 'Unknown error occurred'), true);
         }
     })
     .catch(error => {
@@ -400,11 +589,11 @@ function sendMessage() {
         // Re-enable send button
         sendButton.disabled = false;
 
-        addMessageToChat('error', 'Network error: ' + error.message);
+        addMessageToChat('error', 'Network error: ' + error.message, true);
     });
 }
 
-function addMessageToChat(type, message) {
+function addMessageToChat(type, message, scroll = true) {
     const chatMessages = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
 
@@ -441,7 +630,10 @@ function addMessageToChat(type, message) {
     }
 
     chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    if (scroll) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 }
 
 function addLoadingMessage() {
@@ -507,14 +699,20 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Auto-resize textarea
-document.addEventListener('DOMContentLoaded', function() {
-    const textarea = document.getElementById('userMessage');
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-    textarea.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-    });
-});
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+
+    return date.toLocaleDateString();
+}
 </script>
 {% endblock %}

@@ -2368,12 +2368,102 @@ def ai_assistant():
     """AI Assistant page for querying financial data"""
     return render_template('ai_assistant.html')
 
+@app.route('/api/ai/conversations', methods=['GET'])
+def get_conversations():
+    """Get all conversations"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, title, created_at, updated_at
+            FROM ai_conversations
+            WHERE is_active = 1
+            ORDER BY updated_at DESC
+        ''')
+        conversations = cursor.fetchall()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'conversations': [{
+                'id': row['id'],
+                'title': row['title'],
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at']
+            } for row in conversations]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ai/conversation/<int:conversation_id>', methods=['GET'])
+def get_conversation(conversation_id):
+    """Load a specific conversation with its messages"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Get conversation details
+        cursor.execute('SELECT * FROM ai_conversations WHERE id = ?', (conversation_id,))
+        conversation = cursor.fetchone()
+
+        if not conversation:
+            return jsonify({'success': False, 'error': 'Conversation not found'}), 404
+
+        # Get messages
+        cursor.execute('''
+            SELECT role, content, created_at
+            FROM ai_messages
+            WHERE conversation_id = ?
+            ORDER BY created_at ASC
+        ''', (conversation_id,))
+        messages = cursor.fetchall()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'conversation': {
+                'id': conversation['id'],
+                'title': conversation['title'],
+                'created_at': conversation['created_at'],
+                'updated_at': conversation['updated_at']
+            },
+            'messages': [{
+                'role': msg['role'],
+                'content': msg['content'],
+                'created_at': msg['created_at']
+            } for msg in messages]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ai/conversation/<int:conversation_id>', methods=['DELETE'])
+def delete_conversation(conversation_id):
+    """Delete a conversation"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Soft delete
+        cursor.execute('''
+            UPDATE ai_conversations
+            SET is_active = 0
+            WHERE id = ?
+        ''', (conversation_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/ai/chat', methods=['POST'])
 def ai_chat():
     """API endpoint to chat with Ollama AI about financial data"""
     try:
         data = request.get_json()
         user_message = data.get('message', '')
+        conversation_id = data.get('conversation_id')
 
         if not user_message:
             return jsonify({'error': 'Message is required'}), 400
@@ -2391,39 +2481,109 @@ def ai_chat():
         messages = [
             {
                 'role': 'system',
-                'content': f"""You are a helpful financial assistant for the Perfin app. You have access to the user's financial data and can provide insights, answer questions, and offer advice.
+                'content': f"""You are a helpful financial assistant for the Perfin app. You have DIRECT ACCESS to the user's complete financial database.
 
-Available Data Context:
+CRITICAL: You MUST use the data provided below to answer questions. DO NOT say you don't have access to data - you DO have it right here!
+
+=== USER'S COMPLETE FINANCIAL DATA ===
 {context}
+=== END OF DATA ===
 
-Instructions:
-- Provide clear, concise, and actionable insights
-- Use specific numbers from the context when answering
+IMPORTANT INSTRUCTIONS:
+1. ALWAYS reference the specific numbers from the data above when answering
+2. The data shows ACTUAL records from the user's database
+3. When asked about activities (gym, jiu jitsu, etc.), COUNT the occurrences in the data
+4. When asked about spending, USE the spending breakdown provided
+5. Be specific with dates, amounts, and counts
+6. If the data doesn't cover the exact period asked, mention what period you have data for
+7. NEVER say "I don't have access" - you have all the data above!
+
+Answer style:
 - Be conversational and friendly
-- If you don't have enough data to answer, say so
-- Offer suggestions for improving financial habits when appropriate
-- Format numbers as currency when relevant (e.g., $1,234.56)"""
-            },
-            {
-                'role': 'user',
-                'content': user_message
+- Use exact numbers from the data
+- Provide insights and suggestions based on the patterns you see
+- Format currency as $X,XXX.XX"""
             }
         ]
+
+        # If conversation exists, load previous messages for context
+        if conversation_id:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT role, content FROM ai_messages
+                WHERE conversation_id = ?
+                ORDER BY created_at ASC
+            ''', (conversation_id,))
+            previous_messages = cursor.fetchall()
+            conn.close()
+
+            # Add previous messages (last 8 for context)
+            for msg in previous_messages[-8:]:
+                messages.append({
+                    'role': msg['role'],
+                    'content': msg['content']
+                })
+
+        # Add current user message
+        messages.append({
+            'role': 'user',
+            'content': user_message
+        })
 
         # Call Ollama API with streaming
         response_text = ''
         for part in client.chat(OLLAMA_MODEL, messages=messages, stream=True):
             response_text += part['message']['content']
 
+        # Save conversation to database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Create new conversation if needed
+        if not conversation_id:
+            # Generate title from first message
+            title = user_message[:50] + ('...' if len(user_message) > 50 else '')
+            cursor.execute('''
+                INSERT INTO ai_conversations (title, created_at, updated_at)
+                VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ''', (title,))
+            conversation_id = cursor.lastrowid
+        else:
+            # Update conversation timestamp
+            cursor.execute('''
+                UPDATE ai_conversations
+                SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (conversation_id,))
+
+        # Save user message
+        cursor.execute('''
+            INSERT INTO ai_messages (conversation_id, role, content, created_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (conversation_id, 'user', user_message))
+
+        # Save assistant response
+        cursor.execute('''
+            INSERT INTO ai_messages (conversation_id, role, content, created_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (conversation_id, 'assistant', response_text))
+
+        conn.commit()
+        conn.close()
+
         return jsonify({
             'success': True,
             'response': response_text,
+            'conversation_id': conversation_id,
             'model': OLLAMA_MODEL
         })
 
     except Exception as e:
         error_msg = f"Error in AI chat: {str(e)}"
         print(error_msg)
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': error_msg
@@ -2462,14 +2622,13 @@ SPENDING DATA (Last 30 Days):
 - Recent Purchases: {', '.join([f"{row['item']} (${row['price']})" for row in spending_data[:5]])}
 """)
 
-        # 2. Personal Activities (last 30 days)
+        # 2. Personal Activities (last 90 days with detailed records)
         cursor.execute('''
             SELECT date, gym, jiu_jitsu, skateboarding, work, coitus,
                    sauna, supplements, smoking, drinking, notes
             FROM personal_log
-            WHERE date >= date('now', '-30 days')
+            WHERE date >= date('now', '-90 days')
             ORDER BY date DESC
-            LIMIT 30
         ''')
         personal_data = cursor.fetchall()
 
@@ -2478,21 +2637,53 @@ SPENDING DATA (Last 30 Days):
                 'gym': 0, 'jiu_jitsu': 0, 'skateboarding': 0, 'work': 0,
                 'coitus': 0, 'sauna': 0, 'supplements': 0, 'smoking': 0, 'drinking': 0
             }
+
+            # Build detailed activity log
+            activity_details = []
             for row in personal_data:
-                for activity in activity_counts.keys():
-                    if row[activity]:
-                        activity_counts[activity] += 1
+                day_activities = []
+                if row['gym']:
+                    activity_counts['gym'] += 1
+                    day_activities.append('Gym')
+                if row['jiu_jitsu']:
+                    activity_counts['jiu_jitsu'] += 1
+                    day_activities.append('Jiu Jitsu')
+                if row['skateboarding']:
+                    activity_counts['skateboarding'] += 1
+                    day_activities.append('Skateboarding')
+                if row['work']:
+                    activity_counts['work'] += 1
+                    day_activities.append('Work')
+                if row['sauna']:
+                    activity_counts['sauna'] += 1
+                    day_activities.append('Sauna')
+                if row['supplements']:
+                    activity_counts['supplements'] += 1
+                    day_activities.append('Supplements')
+                if row['smoking']:
+                    activity_counts['smoking'] += 1
+                    day_activities.append('Smoking')
+                if row['drinking']:
+                    activity_counts['drinking'] += 1
+                    day_activities.append('Drinking')
+
+                if day_activities:
+                    activity_details.append(f"{row['date']}: {', '.join(day_activities)}")
 
             context_parts.append(f"""
-PERSONAL ACTIVITIES (Last 30 Days):
-- Gym Sessions: {activity_counts['gym']}
-- Jiu Jitsu Sessions: {activity_counts['jiu_jitsu']}
-- Skateboarding Sessions: {activity_counts['skateboarding']}
-- Work Days: {activity_counts['work']}
-- Sauna Sessions: {activity_counts['sauna']}
+PERSONAL ACTIVITIES (Last 90 Days):
+SUMMARY:
+- Gym Sessions: {activity_counts['gym']} times
+- Jiu Jitsu Sessions: {activity_counts['jiu_jitsu']} times
+- Skateboarding Sessions: {activity_counts['skateboarding']} times
+- Work Days: {activity_counts['work']} days
+- Sauna Sessions: {activity_counts['sauna']} times
 - Supplements Taken: {activity_counts['supplements']} days
-- Smoking Instances: {activity_counts['smoking']}
-- Drinking Instances: {activity_counts['drinking']}
+- Smoking Instances: {activity_counts['smoking']} times
+- Drinking Instances: {activity_counts['drinking']} times
+
+DETAILED LOG (most recent 20 days):
+{chr(10).join(activity_details[:20])}
 """)
 
         # 3. Portfolio Data
