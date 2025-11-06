@@ -197,27 +197,51 @@
     </div>
 
     <div class="col-md-4">
-        <div class="card">
+        <div class="card" id="fixedExpensesCard">
             <div class="card-header bg-warning text-white d-flex justify-content-between align-items-center">
                 <div>
                     <h5><i class="fas fa-list"></i> Fixed Expenses</h5>
-                    <small>{{ "1st" if current_half == 1 else "2nd" }} Half of Month</small>
+                    <small id="expensePeriodLabel">{{ "1st" if current_half == 1 else "2nd" }} Half of Month</small>
                 </div>
                 <button type="button" class="btn btn-sm btn-light" id="expenseModalTrigger">
                     <i class="fas fa-cog"></i>
                 </button>
             </div>
             <div class="card-body">
-                {% for expense_name, expense_data in fixed_expenses.items() %}
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span>{{ expense_name }}</span>
-                    <span class="badge bg-danger">${{ "%.2f"|format(expense_data.amount) }}</span>
+                <!-- Hidden data for both periods -->
+                <script type="application/json" id="expensesData">
+                {
+                    "first_half": {
+                        "expenses": [
+                            {% for expense_name, expense_data in all_first_half.items() %}
+                            {"name": "{{ expense_name }}", "amount": {{ expense_data.amount }}}{{ "," if not loop.last else "" }}
+                            {% endfor %}
+                        ],
+                        "total": {{ all_first_half.values()|map(attribute='amount')|sum if all_first_half else 0 }}
+                    },
+                    "second_half": {
+                        "expenses": [
+                            {% for expense_name, expense_data in all_second_half.items() %}
+                            {"name": "{{ expense_name }}", "amount": {{ expense_data.amount }}}{{ "," if not loop.last else "" }}
+                            {% endfor %}
+                        ],
+                        "total": {{ all_second_half.values()|map(attribute='amount')|sum if all_second_half else 0 }}
+                    }
+                }
+                </script>
+
+                <div id="expensesList">
+                    {% for expense_name, expense_data in fixed_expenses.items() %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>{{ expense_name }}</span>
+                        <span class="badge bg-danger">${{ "%.2f"|format(expense_data.amount) }}</span>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
                 <hr>
                 <div class="d-flex justify-content-between align-items-center">
                     <strong>Total Fixed:</strong>
-                    <strong class="text-danger">${{ "%.2f"|format(total_fixed_expenses) }}</strong>
+                    <strong class="text-danger" id="totalFixedExpenses">${{ "%.2f"|format(total_fixed_expenses) }}</strong>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-2">
                     <strong>Selected Period Spending:</strong>
@@ -226,7 +250,7 @@
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-2">
                     <strong>Total Expenses:</strong>
-                    <strong class="text-danger">${{ "%.2f"|format(total_fixed_expenses + selected_spending) }}</strong>
+                    <strong class="text-danger" id="totalExpensesDisplay">${{ "%.2f"|format(total_fixed_expenses + selected_spending) }}</strong>
                 </div>
             </div>
         </div>
@@ -576,24 +600,66 @@ function updatePreviewCalculations() {
     }
 }
 
+// Update fixed expenses display based on selected pay period
+function updateFixedExpensesDisplay(selectedHalf) {
+    // Parse the expenses data
+    const expensesData = JSON.parse(document.getElementById('expensesData').textContent);
+
+    // Get the appropriate data for the selected half
+    const periodData = selectedHalf === '1' ? expensesData.first_half : expensesData.second_half;
+
+    // Update the period label
+    document.getElementById('expensePeriodLabel').textContent =
+        (selectedHalf === '1' ? '1st' : '2nd') + ' Half of Month';
+
+    // Update the expenses list
+    const expensesList = document.getElementById('expensesList');
+    expensesList.innerHTML = '';
+
+    periodData.expenses.forEach(expense => {
+        const expenseDiv = document.createElement('div');
+        expenseDiv.className = 'd-flex justify-content-between align-items-center mb-2';
+        expenseDiv.innerHTML = `
+            <span>${expense.name}</span>
+            <span class="badge bg-danger">$${expense.amount.toFixed(2)}</span>
+        `;
+        expensesList.appendChild(expenseDiv);
+    });
+
+    // Update total fixed expenses
+    document.getElementById('totalFixedExpenses').textContent =
+        '$' + periodData.total.toFixed(2);
+
+    // Update total expenses (fixed + spending)
+    const selectedSpending = {{ selected_spending }};
+    const totalExpenses = periodData.total + selectedSpending;
+    document.getElementById('totalExpensesDisplay').textContent =
+        '$' + totalExpenses.toFixed(2);
+
+    // Update preview calculations if needed
+    updatePreviewCalculations();
+}
+
 // Auto-update when pay period changes
 document.getElementById('pay_period_half').addEventListener('change', function() {
-    const half = this.value;
-    const message = half === '1' ? 
-        'Fixed expenses will show: Fit4less, Jiu Jitsu, Phone Bill, Car Insurance' :
-        'Fixed expenses will show: Fit4less, Ravi Syal, Condo Insurance';
-    
-    console.log(message);
+    const selectedHalf = this.value;
+    updateFixedExpensesDisplay(selectedHalf);
 });
 
 // Initialize everything when page loads
 document.addEventListener('DOMContentLoaded', function() {
     updateAllocation();
-    
+
     // Add event listeners for income changes
     const incomeInput = document.getElementById('biweekly_income');
     if (incomeInput) {
         incomeInput.addEventListener('input', updatePreviewCalculations);
+    }
+
+    // Initialize fixed expenses display to match the selected dropdown value
+    const payPeriodHalf = document.getElementById('pay_period_half');
+    if (payPeriodHalf) {
+        updateFixedExpensesDisplay(payPeriodHalf.value);
     }
 });
 </script>
