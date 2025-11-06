@@ -2355,6 +2355,233 @@ def toggle_property_tax_payment(tax_id):
         flash(f'Error updating property tax: {str(e)}', 'error')
         return redirect(url_for('condo'))
     
+# ============== AI ASSISTANT ROUTES ==============
+
+@app.route('/ai_assistant')
+def ai_assistant():
+    """AI Assistant page for querying financial data"""
+    return render_template('ai_assistant.html')
+
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    """API endpoint to chat with Ollama AI about financial data"""
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '')
+        ollama_url = data.get('ollama_url', 'https://api.ollama.ai/api/generate')
+        ollama_api_key = data.get('api_key', '')
+        model = data.get('model', 'llama3.2')
+
+        if not user_message:
+            return jsonify({'error': 'Message is required'}), 400
+
+        # Fetch financial context from databases
+        context = fetch_financial_context()
+
+        # Build system prompt with context
+        system_prompt = f"""You are a helpful financial assistant for the Perfin app. You have access to the user's financial data and can provide insights, answer questions, and offer advice.
+
+Available Data Context:
+{context}
+
+Instructions:
+- Provide clear, concise, and actionable insights
+- Use specific numbers from the context when answering
+- Be conversational and friendly
+- If you don't have enough data to answer, say so
+- Offer suggestions for improving financial habits when appropriate
+- Format numbers as currency when relevant (e.g., $1,234.56)
+
+Answer the user's question based on their financial data."""
+
+        # Prepare Ollama API request
+        ollama_payload = {
+            'model': model,
+            'prompt': f"{system_prompt}\n\nUser Question: {user_message}\n\nAssistant:",
+            'stream': False
+        }
+
+        headers = {
+            'Content-Type': 'application/json'
+        }
+
+        # Add API key if provided
+        if ollama_api_key:
+            headers['Authorization'] = f'Bearer {ollama_api_key}'
+
+        # Call Ollama API
+        response = requests.post(ollama_url, json=ollama_payload, headers=headers, timeout=60)
+
+        if response.status_code == 200:
+            result = response.json()
+            ai_response = result.get('response', 'No response from AI')
+
+            return jsonify({
+                'success': True,
+                'response': ai_response,
+                'model': model
+            })
+        else:
+            error_msg = f"Ollama API error: {response.status_code} - {response.text}"
+            print(error_msg)
+            return jsonify({
+                'success': False,
+                'error': error_msg
+            }), 500
+
+    except requests.exceptions.Timeout:
+        return jsonify({
+            'success': False,
+            'error': 'Request timed out. Please try again.'
+        }), 504
+    except Exception as e:
+        error_msg = f"Error in AI chat: {str(e)}"
+        print(error_msg)
+        return jsonify({
+            'success': False,
+            'error': error_msg
+        }), 500
+
+def fetch_financial_context():
+    """Fetch comprehensive financial context from all databases"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        context_parts = []
+
+        # 1. Spending Data (last 30 days)
+        cursor.execute('''
+            SELECT date, item, price, category
+            FROM spending_log
+            WHERE date >= date('now', '-30 days')
+            ORDER BY date DESC
+            LIMIT 50
+        ''')
+        spending_data = cursor.fetchall()
+
+        if spending_data:
+            total_spending = sum(float(row['price']) for row in spending_data)
+            spending_by_category = {}
+            for row in spending_data:
+                cat = row['category'] or 'Uncategorized'
+                spending_by_category[cat] = spending_by_category.get(cat, 0) + float(row['price'])
+
+            context_parts.append(f"""
+SPENDING DATA (Last 30 Days):
+- Total Spending: ${total_spending:.2f}
+- Number of Transactions: {len(spending_data)}
+- Spending by Category: {', '.join([f'{k}: ${v:.2f}' for k, v in spending_by_category.items()])}
+- Recent Purchases: {', '.join([f"{row['item']} (${row['price']})" for row in spending_data[:5]])}
+""")
+
+        # 2. Personal Activities (last 30 days)
+        cursor.execute('''
+            SELECT date, gym, jiu_jitsu, skateboarding, work, coitus,
+                   sauna, supplements, smoking, drinking, notes
+            FROM personal_log
+            WHERE date >= date('now', '-30 days')
+            ORDER BY date DESC
+            LIMIT 30
+        ''')
+        personal_data = cursor.fetchall()
+
+        if personal_data:
+            activity_counts = {
+                'gym': 0, 'jiu_jitsu': 0, 'skateboarding': 0, 'work': 0,
+                'coitus': 0, 'sauna': 0, 'supplements': 0, 'smoking': 0, 'drinking': 0
+            }
+            for row in personal_data:
+                for activity in activity_counts.keys():
+                    if row[activity]:
+                        activity_counts[activity] += 1
+
+            context_parts.append(f"""
+PERSONAL ACTIVITIES (Last 30 Days):
+- Gym Sessions: {activity_counts['gym']}
+- Jiu Jitsu Sessions: {activity_counts['jiu_jitsu']}
+- Skateboarding Sessions: {activity_counts['skateboarding']}
+- Work Days: {activity_counts['work']}
+- Sauna Sessions: {activity_counts['sauna']}
+- Supplements Taken: {activity_counts['supplements']} days
+- Smoking Instances: {activity_counts['smoking']}
+- Drinking Instances: {activity_counts['drinking']}
+""")
+
+        # 3. Portfolio Data
+        cursor.execute('''
+            SELECT etf_symbol, purchase_value
+            FROM etf_holdings
+            ORDER BY etf_symbol
+        ''')
+        etf_holdings = cursor.fetchall()
+
+        cursor.execute('''
+            SELECT date, total_portfolio_value, nasdaq_value, btcc_value, zsp_value
+            FROM portfolio_log
+            ORDER BY date DESC
+            LIMIT 1
+        ''')
+        latest_portfolio = cursor.fetchone()
+
+        if etf_holdings or latest_portfolio:
+            total_invested = sum(float(row['purchase_value']) for row in etf_holdings)
+
+            portfolio_info = f"""
+ETF PORTFOLIO:
+- Total Invested: ${total_invested:.2f}
+"""
+            if latest_portfolio:
+                current_value = float(latest_portfolio['total_portfolio_value'])
+                profit_loss = current_value - total_invested
+                profit_loss_pct = (profit_loss / total_invested * 100) if total_invested > 0 else 0
+
+                portfolio_info += f"""- Current Value: ${current_value:.2f}
+- Profit/Loss: ${profit_loss:.2f} ({profit_loss_pct:+.2f}%)
+- NAS Value: ${latest_portfolio['nasdaq_value']:.2f}
+- BTCC Value: ${latest_portfolio['btcc_value']:.2f}
+- ZSP Value: ${latest_portfolio['zsp_value']:.2f}
+"""
+
+            holdings_list = ', '.join([f"{row['etf_symbol']}: ${row['purchase_value']}" for row in etf_holdings])
+            portfolio_info += f"- Holdings: {holdings_list}\n"
+            context_parts.append(portfolio_info)
+
+        # 4. Condo Data
+        cursor.execute('SELECT * FROM condo_config LIMIT 1')
+        condo_config = cursor.fetchone()
+
+        if condo_config:
+            context_parts.append(f"""
+CONDO FINANCES:
+- Mortgage Payment: ${condo_config['mortgage_payment']:.2f}
+- Condo Fee: ${condo_config['condo_fee']:.2f}
+- Annual Property Tax: ${condo_config['property_tax']:.2f}
+- Rent Income: ${condo_config['rent_amount']:.2f}
+- Monthly Costs: ${condo_config['mortgage_payment'] + condo_config['condo_fee'] + (condo_config['property_tax']/12):.2f}
+- Net Monthly (Rent - Costs): ${condo_config['rent_amount'] - (condo_config['mortgage_payment'] + condo_config['condo_fee'] + condo_config['property_tax']/12):.2f}
+""")
+
+        # 5. Savings Data
+        cursor.execute('SELECT * FROM savings_config LIMIT 1')
+        savings_config = cursor.fetchone()
+
+        if savings_config:
+            context_parts.append(f"""
+SAVINGS:
+- Current Savings: ${savings_config['current_savings']:.2f}
+- Annual Savings Goal: ${savings_config['annual_savings_goal']:.2f}
+- Months to Reach Goal: {savings_config['months_to_reach_goal']}
+""")
+
+        conn.close()
+
+        return '\n'.join(context_parts) if context_parts else "No financial data available yet."
+
+    except Exception as e:
+        print(f"Error fetching context: {e}")
+        return "Error fetching financial data."
+
 if __name__ == '__main__':
     # Add pytz to requirements
     app.run(debug=True, host='0.0.0.0', port=5001)
