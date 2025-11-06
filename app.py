@@ -2591,88 +2591,112 @@ Answer style:
 
 def fetch_financial_context():
     """Fetch comprehensive financial context from all databases"""
+    context_parts = []
+    conn = None
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        context_parts = []
-
         # 1. Spending Data (last 30 days)
-        cursor.execute('''
-            SELECT date, item, price, category
-            FROM spending_log
-            WHERE date >= date('now', '-30 days')
-            ORDER BY date DESC
-            LIMIT 50
-        ''')
-        spending_data = cursor.fetchall()
+        try:
+            cursor.execute('''
+                SELECT date, item, price, category
+                FROM spending_log
+                WHERE date >= date('now', '-30 days')
+                ORDER BY date DESC
+                LIMIT 50
+            ''')
+            spending_data = cursor.fetchall()
 
-        if spending_data:
-            total_spending = sum(float(row['price']) for row in spending_data)
-            spending_by_category = {}
-            for row in spending_data:
-                cat = row['category'] or 'Uncategorized'
-                spending_by_category[cat] = spending_by_category.get(cat, 0) + float(row['price'])
+            if spending_data:
+                total_spending = sum(float(row['price']) for row in spending_data)
+                spending_by_category = {}
+                for row in spending_data:
+                    cat = row['category'] or 'Uncategorized'
+                    spending_by_category[cat] = spending_by_category.get(cat, 0) + float(row['price'])
 
-            context_parts.append(f"""
+                context_parts.append(f"""
 SPENDING DATA (Last 30 Days):
 - Total Spending: ${total_spending:.2f}
 - Number of Transactions: {len(spending_data)}
 - Spending by Category: {', '.join([f'{k}: ${v:.2f}' for k, v in spending_by_category.items()])}
 - Recent Purchases: {', '.join([f"{row['item']} (${row['price']})" for row in spending_data[:5]])}
 """)
+            else:
+                context_parts.append("\nSPENDING DATA: No spending records in last 30 days\n")
+        except Exception as e:
+            print(f"Error fetching spending data: {e}")
+            import traceback
+            traceback.print_exc()
+            context_parts.append(f"\nSPENDING DATA: Error - {str(e)}\n")
 
-        # 2. Personal Activities (last 90 days with detailed records)
-        cursor.execute('''
-            SELECT date, gym, jiu_jitsu, skateboarding, work, coitus,
-                   sauna, supplements, smoking, drinking, notes
-            FROM personal_log
-            WHERE date >= date('now', '-90 days')
-            ORDER BY date DESC
-        ''')
-        personal_data = cursor.fetchall()
+        # 2. Personal Activities (ALL historical data for complete analysis)
+        try:
+            cursor.execute('''
+                SELECT date, gym, jiu_jitsu, skateboarding, work, coitus,
+                       sauna, supplements, smoking, drinking, notes
+                FROM personal_log
+                ORDER BY date DESC
+            ''')
+            personal_data = cursor.fetchall()
 
-        if personal_data:
-            activity_counts = {
-                'gym': 0, 'jiu_jitsu': 0, 'skateboarding': 0, 'work': 0,
-                'coitus': 0, 'sauna': 0, 'supplements': 0, 'smoking': 0, 'drinking': 0
-            }
+            if personal_data:
+                activity_counts = {
+                    'gym': 0, 'jiu_jitsu': 0, 'skateboarding': 0, 'work': 0,
+                    'coitus': 0, 'sauna': 0, 'supplements': 0, 'smoking': 0, 'drinking': 0
+                }
 
-            # Build detailed activity log
-            activity_details = []
-            for row in personal_data:
-                day_activities = []
-                if row['gym']:
-                    activity_counts['gym'] += 1
-                    day_activities.append('Gym')
-                if row['jiu_jitsu']:
-                    activity_counts['jiu_jitsu'] += 1
-                    day_activities.append('Jiu Jitsu')
-                if row['skateboarding']:
-                    activity_counts['skateboarding'] += 1
-                    day_activities.append('Skateboarding')
-                if row['work']:
-                    activity_counts['work'] += 1
-                    day_activities.append('Work')
-                if row['sauna']:
-                    activity_counts['sauna'] += 1
-                    day_activities.append('Sauna')
-                if row['supplements']:
-                    activity_counts['supplements'] += 1
-                    day_activities.append('Supplements')
-                if row['smoking']:
-                    activity_counts['smoking'] += 1
-                    day_activities.append('Smoking')
-                if row['drinking']:
-                    activity_counts['drinking'] += 1
-                    day_activities.append('Drinking')
+                # Build detailed activity log with dates
+                activity_details = []
+                smoking_dates = []
+                jj_dates = []
+                gym_dates = []
 
-                if day_activities:
-                    activity_details.append(f"{row['date']}: {', '.join(day_activities)}")
+                for row in personal_data:
+                    day_activities = []
+                    if row['gym']:
+                        activity_counts['gym'] += 1
+                        day_activities.append('Gym')
+                        gym_dates.append(row['date'])
+                    if row['jiu_jitsu']:
+                        activity_counts['jiu_jitsu'] += 1
+                        day_activities.append('Jiu Jitsu')
+                        jj_dates.append(row['date'])
+                    if row['skateboarding']:
+                        activity_counts['skateboarding'] += 1
+                        day_activities.append('Skateboarding')
+                    if row['work']:
+                        activity_counts['work'] += 1
+                        day_activities.append('Work')
+                    if row['sauna']:
+                        activity_counts['sauna'] += 1
+                        day_activities.append('Sauna')
+                    if row['supplements']:
+                        activity_counts['supplements'] += 1
+                        day_activities.append('Supplements')
+                    if row['smoking']:
+                        activity_counts['smoking'] += 1
+                        day_activities.append('Smoking')
+                        smoking_dates.append(row['date'])
+                    if row['drinking']:
+                        activity_counts['drinking'] += 1
+                        day_activities.append('Drinking')
 
-            context_parts.append(f"""
-PERSONAL ACTIVITIES (Last 90 Days):
-SUMMARY:
+                    if day_activities:
+                        activity_details.append(f"{row['date']}: {', '.join(day_activities)}")
+
+                # Get date range
+                if personal_data:
+                    earliest_date = personal_data[-1]['date']
+                    latest_date = personal_data[0]['date']
+                    total_days = len(personal_data)
+
+                    context_parts.append(f"""
+PERSONAL ACTIVITIES DATABASE (Complete History):
+DATE RANGE: {earliest_date} to {latest_date} ({total_days} days of records)
+
+LIFETIME TOTALS:
 - Gym Sessions: {activity_counts['gym']} times
 - Jiu Jitsu Sessions: {activity_counts['jiu_jitsu']} times
 - Skateboarding Sessions: {activity_counts['skateboarding']} times
@@ -2682,55 +2706,81 @@ SUMMARY:
 - Smoking Instances: {activity_counts['smoking']} times
 - Drinking Instances: {activity_counts['drinking']} times
 
-DETAILED LOG (most recent 20 days):
-{chr(10).join(activity_details[:20])}
+DETAILED ACTIVITY LOG (Most Recent 30 Days):
+{chr(10).join(activity_details[:30])}
+
+COMPLETE SMOKING DATES (for 2025 and all time):
+{', '.join(smoking_dates) if smoking_dates else 'No smoking recorded'}
+
+COMPLETE JIU JITSU DATES (All Time):
+{', '.join(jj_dates[:50]) if jj_dates else 'No jiu jitsu recorded'}... (showing first 50)
+
+COMPLETE GYM DATES (All Time):
+{', '.join(gym_dates[:50]) if gym_dates else 'No gym recorded'}... (showing first 50)
 """)
+            else:
+                context_parts.append("\nPERSONAL ACTIVITIES: No activity records found\n")
+        except Exception as e:
+            print(f"Error fetching personal activities: {e}")
+            import traceback
+            traceback.print_exc()
+            context_parts.append(f"\nPERSONAL ACTIVITIES: Error - {str(e)}\n")
 
         # 3. Portfolio Data
-        cursor.execute('''
-            SELECT etf_symbol, purchase_value
-            FROM etf_holdings
-            ORDER BY etf_symbol
-        ''')
-        etf_holdings = cursor.fetchall()
+        try:
+            cursor.execute('''
+                SELECT etf_symbol, purchase_value
+                FROM etf_holdings
+                ORDER BY etf_symbol
+            ''')
+            etf_holdings = cursor.fetchall()
 
-        cursor.execute('''
-            SELECT date, total_portfolio_value, nasdaq_value, btcc_value, zsp_value
-            FROM portfolio_log
-            ORDER BY date DESC
-            LIMIT 1
-        ''')
-        latest_portfolio = cursor.fetchone()
+            cursor.execute('''
+                SELECT date, total_portfolio_value, nasdaq_value, btcc_value, zsp_value
+                FROM portfolio_log
+                ORDER BY date DESC
+                LIMIT 1
+            ''')
+            latest_portfolio = cursor.fetchone()
 
-        if etf_holdings or latest_portfolio:
-            total_invested = sum(float(row['purchase_value']) for row in etf_holdings)
+            if etf_holdings or latest_portfolio:
+                total_invested = sum(float(row['purchase_value']) for row in etf_holdings) if etf_holdings else 0
 
-            portfolio_info = f"""
+                portfolio_info = f"""
 ETF PORTFOLIO:
 - Total Invested: ${total_invested:.2f}
 """
-            if latest_portfolio:
-                current_value = float(latest_portfolio['total_portfolio_value'])
-                profit_loss = current_value - total_invested
-                profit_loss_pct = (profit_loss / total_invested * 100) if total_invested > 0 else 0
+                if latest_portfolio:
+                    current_value = float(latest_portfolio['total_portfolio_value'])
+                    profit_loss = current_value - total_invested
+                    profit_loss_pct = (profit_loss / total_invested * 100) if total_invested > 0 else 0
 
-                portfolio_info += f"""- Current Value: ${current_value:.2f}
+                    portfolio_info += f"""- Current Value: ${current_value:.2f}
 - Profit/Loss: ${profit_loss:.2f} ({profit_loss_pct:+.2f}%)
 - NAS Value: ${latest_portfolio['nasdaq_value']:.2f}
 - BTCC Value: ${latest_portfolio['btcc_value']:.2f}
 - ZSP Value: ${latest_portfolio['zsp_value']:.2f}
 """
 
-            holdings_list = ', '.join([f"{row['etf_symbol']}: ${row['purchase_value']}" for row in etf_holdings])
-            portfolio_info += f"- Holdings: {holdings_list}\n"
-            context_parts.append(portfolio_info)
+                if etf_holdings:
+                    holdings_list = ', '.join([f"{row['etf_symbol']}: ${row['purchase_value']}" for row in etf_holdings])
+                    portfolio_info += f"- Holdings: {holdings_list}\n"
+                context_parts.append(portfolio_info)
+            else:
+                context_parts.append("\nETF PORTFOLIO: No portfolio data found\n")
+        except Exception as e:
+            print(f"Error fetching portfolio data: {e}")
+            import traceback
+            traceback.print_exc()
+            context_parts.append(f"\nETF PORTFOLIO: Error - {str(e)}\n")
 
         # 4. Condo Data
-        cursor.execute('SELECT * FROM condo_config LIMIT 1')
-        condo_config = cursor.fetchone()
+        try:
+            cursor.execute('SELECT * FROM condo_config LIMIT 1')
+            condo_config = cursor.fetchone()
 
-        if condo_config:
-            context_parts.append(f"""
+            if condo_config:
+                context_parts.append(f"""
 CONDO FINANCES:
 - Mortgage Payment: ${condo_config['mortgage_payment']:.2f}
 - Condo Fee: ${condo_config['condo_fee']:.2f}
@@ -2739,26 +2789,48 @@ CONDO FINANCES:
 - Monthly Costs: ${condo_config['mortgage_payment'] + condo_config['condo_fee'] + (condo_config['property_tax']/12):.2f}
 - Net Monthly (Rent - Costs): ${condo_config['rent_amount'] - (condo_config['mortgage_payment'] + condo_config['condo_fee'] + condo_config['property_tax']/12):.2f}
 """)
+            else:
+                context_parts.append("\nCONDO FINANCES: No condo config found\n")
+        except Exception as e:
+            print(f"Error fetching condo data: {e}")
+            import traceback
+            traceback.print_exc()
+            context_parts.append(f"\nCONDO FINANCES: Error - {str(e)}\n")
 
         # 5. Savings Data
-        cursor.execute('SELECT * FROM savings_config LIMIT 1')
-        savings_config = cursor.fetchone()
+        try:
+            cursor.execute('SELECT * FROM savings_config LIMIT 1')
+            savings_config = cursor.fetchone()
 
-        if savings_config:
-            context_parts.append(f"""
+            if savings_config:
+                context_parts.append(f"""
 SAVINGS:
 - Current Savings: ${savings_config['current_savings']:.2f}
 - Annual Savings Goal: ${savings_config['annual_savings_goal']:.2f}
 - Months to Reach Goal: {savings_config['months_to_reach_goal']}
 """)
+            else:
+                context_parts.append("\nSAVINGS: No savings config found\n")
+        except Exception as e:
+            print(f"Error fetching savings data: {e}")
+            import traceback
+            traceback.print_exc()
+            context_parts.append(f"\nSAVINGS: Error - {str(e)}\n")
 
-        conn.close()
+        if conn:
+            conn.close()
 
-        return '\n'.join(context_parts) if context_parts else "No financial data available yet."
+        final_context = '\n'.join(context_parts) if context_parts else "No financial data available - database might be empty."
+        print(f"[DEBUG] Context length: {len(final_context)} characters")
+        return final_context
 
     except Exception as e:
-        print(f"Error fetching context: {e}")
-        return "Error fetching financial data."
+        print(f"CRITICAL Error in fetch_financial_context: {e}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.close()
+        return f"CRITICAL ERROR fetching data: {str(e)}. Check server logs for details."
 
 if __name__ == '__main__':
     # Add pytz to requirements
