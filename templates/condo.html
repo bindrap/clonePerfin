@@ -3,9 +3,24 @@
 {% block title %}Condo Management - Perfin{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12">
+<div class="row mb-3">
+    <div class="col-md-8">
         <h1><i class="fas fa-building"></i> Condo Property Management</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <!-- Year Navigation -->
+        <div class="btn-group" role="group">
+            {% for year in available_years %}
+                <a href="{{ url_for('condo', year=year) }}" class="btn {% if year == current_year %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    {{ year }}
+                </a>
+            {% endfor %}
+            {% if current_year + 1 not in available_years %}
+                <a href="{{ url_for('condo', year=current_year + 1) }}" class="btn btn-outline-success">
+                    <i class="fas fa-plus"></i> {{ current_year + 1 }}
+                </a>
+            {% endif %}
+        </div>
     </div>
 </div>
 
@@ -53,7 +68,7 @@
                 </table>
                 
                 <hr>
-                <form method="POST" action="{{ url_for('update_condo_config') }}" class="row g-2">
+                <form method="POST" action="{{ url_for('update_condo_config', year=current_year) }}" class="row g-2">
                     <div class="col-6">
                         <label class="form-label">Mortgage</label>
                         <input type="number" step="0.01" name="mortgage" class="form-control" value="{{ config.mortgage }}" required>
@@ -63,7 +78,7 @@
                         <input type="number" step="0.01" name="condo_fee" class="form-control" value="{{ config.condo_fee }}" required>
                     </div>
                     <div class="col-6">
-                        <label class="form-label">Property Tax</label>
+                        <label class="form-label">Property Tax (Monthly)</label>
                         <input type="number" step="0.01" name="property_tax" class="form-control" value="{{ config.property_tax }}" required>
                     </div>
                     <div class="col-6">
@@ -72,7 +87,7 @@
                     </div>
                     <div class="col-12">
                         <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-save"></i> Update Configuration
+                            <i class="fas fa-save"></i> Update {{ current_year }} Lease Terms
                         </button>
                     </div>
                 </form>
