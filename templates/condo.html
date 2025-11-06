@@ -227,19 +227,19 @@
                 <div class="row mb-3">
                     <div class="col-md-3">
                         <div class="stat-card bg-info text-white">
-                            <div class="stat-number">${{ "%.2f"|format(tax_summary.total_amount) if tax_summary else "0.00" }}</div>
+                            <div class="stat-number">${{ "%.2f"|format(tax_summary.total_amount) if tax_summary and tax_summary.total_amount else "0.00" }}</div>
                             <small>Total Amount</small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card bg-success text-white">
-                            <div class="stat-number">{{ tax_summary.paid_count if tax_summary else 0 }}</div>
+                            <div class="stat-number">{{ tax_summary.paid_count if tax_summary and tax_summary.paid_count else 0 }}</div>
                             <small>Paid</small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card bg-warning text-dark">
-                            <div class="stat-number">{{ (tax_summary.total_count - tax_summary.paid_count) if tax_summary else 0 }}</div>
+                            <div class="stat-number">{{ (tax_summary.total_count - tax_summary.paid_count) if tax_summary and tax_summary.total_count else 0 }}</div>
                             <small>Remaining</small>
                         </div>
                     </div>
@@ -263,31 +263,40 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for tax in property_tax_data %}
-                                <tr {% if tax.was_late %}class="table-warning"{% endif %}>
-                                    <td><strong>{{ tax.installment_number }}{{ ['st', 'nd', 'rd', 'th'][tax.installment_number-1] if tax.installment_number <= 4 else 'th' }}</strong></td>
-                                    <td>${{ "%.2f"|format(tax.amount) }}</td>
-                                    <td>{{ tax.due_date }}{% if tax.was_late %} <span class="badge bg-warning">was late</span>{% endif %}</td>
-                                    <td>
-                                        {% if tax.paid %}
-                                            <span class="badge bg-success">Paid</span>
-                                            {% if tax.paid_date %}
-                                                <small class="text-muted">({{ tax.paid_date }})</small>
+                            {% if property_tax_data %}
+                                {% for tax in property_tax_data %}
+                                    <tr {% if tax.was_late %}class="table-warning"{% endif %}>
+                                        <td><strong>{{ tax.installment_number }}{{ ['st', 'nd', 'rd', 'th'][tax.installment_number-1] if tax.installment_number <= 4 else 'th' }}</strong></td>
+                                        <td>${{ "%.2f"|format(tax.amount) }}</td>
+                                        <td>{{ tax.due_date }}{% if tax.was_late %} <span class="badge bg-warning">was late</span>{% endif %}</td>
+                                        <td>
+                                            {% if tax.paid %}
+                                                <span class="badge bg-success">Paid</span>
+                                                {% if tax.paid_date %}
+                                                    <small class="text-muted">({{ tax.paid_date }})</small>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-danger">Unpaid</span>
                                             {% endif %}
-                                        {% else %}
-                                            <span class="badge bg-danger">Unpaid</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <form method="POST" action="{{ url_for('toggle_property_tax_payment', tax_id=tax.id) }}" style="display:inline;">
-                                            <button type="submit" class="btn btn-sm {% if tax.paid %}btn-success{% else %}btn-outline-success{% endif %}">
-                                                <i class="fas fa-{% if tax.paid %}check-circle{% else %}circle{% endif %}"></i>
-                                                {{ 'Paid' if tax.paid else 'Mark Paid' }}
-                                            </button>
-                                        </form>
+                                        </td>
+                                        <td>
+                                            <form method="POST" action="{{ url_for('toggle_property_tax_payment', tax_id=tax.id) }}" style="display:inline;">
+                                                <button type="submit" class="btn btn-sm {% if tax.paid %}btn-success{% else %}btn-outline-success{% endif %}">
+                                                    <i class="fas fa-{% if tax.paid %}check-circle{% else %}circle{% endif %}"></i>
+                                                    {{ 'Paid' if tax.paid else 'Mark Paid' }}
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="fas fa-info-circle"></i> No property tax schedule for {{ current_year }} yet.
+                                        <br><small>Add installments manually in the database or create them through the admin panel.</small>
                                     </td>
                                 </tr>
-                            {% endfor %}
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
