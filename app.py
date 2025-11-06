@@ -57,6 +57,24 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def convert_row_dates(row, date_fields):
+    """Convert date string fields to datetime objects in a sqlite3.Row"""
+    if not row:
+        return row
+    row_dict = dict(row)
+    for field in date_fields:
+        if field in row_dict and row_dict[field]:
+            try:
+                # Try date format first (YYYY-MM-DD)
+                row_dict[field] = datetime.strptime(row_dict[field], '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    # Try datetime format (YYYY-MM-DD HH:MM:SS)
+                    row_dict[field] = datetime.strptime(row_dict[field], '%Y-%m-%d %H:%M:%S')
+                except (ValueError, TypeError):
+                    pass  # Keep original value if conversion fails
+    return type('obj', (object,), row_dict)
+
 def determine_pay_period_type(start_date, end_date):
     """
     Determine if a budget period is first or second half based on the logic:
@@ -231,10 +249,14 @@ def dashboard():
         ORDER BY date DESC, id DESC
         LIMIT 10
     ''')
-    recent_purchases = cursor.fetchall()
-    
+    recent_purchases_raw = cursor.fetchall()
+    recent_purchases = [convert_row_dates(row, ['date']) for row in recent_purchases_raw]
+
+    # Convert top_spending_items dates as well
+    top_spending_items_converted = [convert_row_dates(row, ['last_purchase']) for row in top_spending_items]
+
     conn.close()
-    
+
     return render_template('dashboard.html',
                          budget_period=budget_period,
                          total_spent=total_spent,
@@ -243,7 +265,7 @@ def dashboard():
                          daily_spend_limit=daily_spend_limit,
                          activity_stats=activity_stats,
                          activity_percentages=activity_percentages,
-                         top_spending_items=top_spending_items,
+                         top_spending_items=top_spending_items_converted,
                          recent_purchases=recent_purchases,
                          today=today)
 
@@ -423,36 +445,38 @@ def spending():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT * FROM spending_log 
-        WHERE date = ? 
+        SELECT * FROM spending_log
+        WHERE date = ?
         ORDER BY created_at DESC
     ''', (toronto_today,))
-    today_spending = cursor.fetchall()
-    
+    today_spending_raw = cursor.fetchall()
+    today_spending = [convert_row_dates(row, ['date', 'created_at']) for row in today_spending_raw]
+
     cursor.execute('''
-        SELECT * FROM spending_log 
+        SELECT * FROM spending_log
         WHERE date BETWEEN ? AND ?
         ORDER BY date DESC, created_at DESC
     ''', (budget_period['start_date'], budget_period['end_date']))
-    period_spending = cursor.fetchall()
-    
+    period_spending_raw = cursor.fetchall()
+    period_spending = [convert_row_dates(row, ['date', 'created_at']) for row in period_spending_raw]
+
     cursor.execute('''
-        SELECT SUM(price) as total 
-        FROM spending_log 
+        SELECT SUM(price) as total
+        FROM spending_log
         WHERE date = ?
     ''', (toronto_today,))
     today_total = cursor.fetchone()['total'] or 0
-    
+
     cursor.execute('''
-        SELECT SUM(price) as total 
-        FROM spending_log 
+        SELECT SUM(price) as total
+        FROM spending_log
         WHERE date BETWEEN ? AND ?
     ''', (budget_period['start_date'], budget_period['end_date']))
     period_total = cursor.fetchone()['total'] or 0
-    
+
     conn.close()
-    
-    return render_template('spending.html', 
+
+    return render_template('spending.html',
                          budget_period=budget_period,
                          today_spending=today_spending,
                          period_spending=period_spending,
@@ -1869,7 +1893,8 @@ def savings():
         ORDER BY created_at DESC
         LIMIT 5
     ''')
-    recent_calculations = cursor.fetchall()
+    recent_calculations_raw = cursor.fetchall()
+    recent_calculations = [convert_row_dates(row, ['created_at']) for row in recent_calculations_raw]
 
     conn.close()
 
