@@ -2491,12 +2491,14 @@ CRITICAL: You MUST use the data provided below to answer questions. DO NOT say y
 
 IMPORTANT INSTRUCTIONS:
 1. ALWAYS reference the specific numbers from the data above when answering
-2. The data shows ACTUAL records from the user's database
+2. The data shows ACTUAL records from the user's database with dates, notes, and all details
 3. When asked about activities (gym, jiu jitsu, etc.), COUNT the occurrences in the data
-4. When asked about spending, USE the spending breakdown provided
-5. Be specific with dates, amounts, and counts
-6. If the data doesn't cover the exact period asked, mention what period you have data for
-7. NEVER say "I don't have access" - you have all the data above!
+4. When asked about spending, USE the detailed transaction log with dates
+5. Be specific with dates, amounts, counts, and NOTES
+6. If asked about a specific date that doesn't have data, say "I don't have data recorded for [date] yet. The most recent data I have is from [latest_date]" and show what data IS available nearby
+7. NEVER say "there is no Notes section" - notes are included in the activity log with "| Notes:" labels
+8. NEVER say "I don't have access" - you have all the data above!
+9. When showing notes, quote them directly from the data
 
 Answer style:
 - Be conversational and friendly
@@ -2598,33 +2600,38 @@ def fetch_financial_context():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 1. Spending Data (last 30 days)
+        # 1. Spending Data (last 90 days with full details)
         try:
             cursor.execute('''
                 SELECT date, item, price, category
                 FROM spending_log
-                WHERE date >= date('now', '-30 days')
+                WHERE date >= date('now', '-90 days')
                 ORDER BY date DESC
-                LIMIT 50
             ''')
             spending_data = cursor.fetchall()
 
             if spending_data:
                 total_spending = sum(float(row['price']) for row in spending_data)
                 spending_by_category = {}
+                detailed_transactions = []
+
                 for row in spending_data:
                     cat = row['category'] or 'Uncategorized'
                     spending_by_category[cat] = spending_by_category.get(cat, 0) + float(row['price'])
+                    date_str = str(row['date'])
+                    detailed_transactions.append(f"{date_str}: {row['item']} - ${float(row['price']):.2f} ({cat})")
 
                 context_parts.append(f"""
-SPENDING DATA (Last 30 Days):
+SPENDING DATA (Last 90 Days):
 - Total Spending: ${total_spending:.2f}
 - Number of Transactions: {len(spending_data)}
 - Spending by Category: {', '.join([f'{k}: ${v:.2f}' for k, v in spending_by_category.items()])}
-- Recent Purchases: {', '.join([f"{row['item']} (${row['price']})" for row in spending_data[:5]])}
+
+DETAILED TRANSACTION LOG (Most Recent 50):
+{chr(10).join(detailed_transactions[:50])}
 """)
             else:
-                context_parts.append("\nSPENDING DATA: No spending records in last 30 days\n")
+                context_parts.append("\nSPENDING DATA: No spending records in last 90 days\n")
         except Exception as e:
             print(f"Error fetching spending data: {e}")
             import traceback
@@ -2680,8 +2687,12 @@ SPENDING DATA (Last 30 Days):
                         activity_counts['supplements'] += 1
                         day_activities.append('Supplements')
 
-                    if day_activities:
-                        activity_details.append(f"{date_str}: {', '.join(day_activities)}")
+                    if day_activities or row['notes']:
+                        activity_line = f"{date_str}: {', '.join(day_activities)}"
+                        # Add notes if they exist
+                        if row['notes'] and row['notes'].strip():
+                            activity_line += f" | Notes: {row['notes'].strip()}"
+                        activity_details.append(activity_line)
 
                 # Get date range
                 if personal_data:
