@@ -339,34 +339,20 @@ def calendar():
     start_date_param = request.args.get('start_date')
     end_date_param = request.args.get('end_date')
     
-    # Default to extended range that covers full calendar view
+    # Default to showing ALL historical data
     today = get_toronto_date()
     if start_date_param and end_date_param:
         try:
             start_date = datetime.strptime(start_date_param, '%Y-%m-%d').date()
             end_date = datetime.strptime(end_date_param, '%Y-%m-%d').date()
         except ValueError:
-            # Get first day of current month
-            first_of_month = today.replace(day=1)
-            # Go back to start of calendar week (Sunday = 0)
-            days_back = (first_of_month.weekday() + 1) % 7
-            start_date = first_of_month - timedelta(days=days_back)
-            # Get last day of current month
-            last_of_month = (first_of_month + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-            # Go forward to end of calendar week (Saturday)
-            days_forward = (6 - last_of_month.weekday()) % 7
-            end_date = last_of_month + timedelta(days=days_forward)
+            # Default to all time data if invalid parameters
+            start_date = datetime(2020, 1, 1).date()  # Very early date to capture all data
+            end_date = today
     else:
-        # Get first day of current month
-        first_of_month = today.replace(day=1)
-        # Go back to start of calendar week (Sunday = 0)
-        days_back = (first_of_month.weekday() + 1) % 7
-        start_date = first_of_month - timedelta(days=days_back)
-        # Get last day of current month
-        last_of_month = (first_of_month + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        # Go forward to end of calendar week (Saturday)
-        days_forward = (6 - last_of_month.weekday()) % 7
-        end_date = last_of_month + timedelta(days=days_forward)
+        # Default to all time data - show everything
+        start_date = datetime(2020, 1, 1).date()  # Very early date to capture all data
+        end_date = today
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -2747,12 +2733,11 @@ def fetch_financial_context():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 1. Spending Data (last 90 days with full details)
+        # 1. Spending Data (ALL historical data for complete analysis)
         try:
             cursor.execute('''
                 SELECT date, item, price, category
                 FROM spending_log
-                WHERE date >= date('now', '-90 days')
                 ORDER BY date DESC
             ''')
             spending_data = cursor.fetchall()
@@ -2768,17 +2753,22 @@ def fetch_financial_context():
                     date_str = str(row['date'])
                     detailed_transactions.append(f"{date_str}: {row['item']} - ${float(row['price']):.2f} ({cat})")
 
+                # Get date range for display
+                earliest_date = str(spending_data[-1]['date']) if spending_data else 'N/A'
+                latest_date = str(spending_data[0]['date']) if spending_data else 'N/A'
+                
                 context_parts.append(f"""
-SPENDING DATA (Last 90 Days):
+SPENDING DATABASE (Complete History):
+DATE RANGE: {earliest_date} to {latest_date}
 - Total Spending: ${total_spending:.2f}
 - Number of Transactions: {len(spending_data)}
 - Spending by Category: {', '.join([f'{k}: ${v:.2f}' for k, v in spending_by_category.items()])}
 
-DETAILED TRANSACTION LOG (Most Recent 50):
-{chr(10).join(detailed_transactions[:50])}
+DETAILED TRANSACTION LOG (Complete History - Most Recent First):
+{chr(10).join(detailed_transactions)}
 """)
             else:
-                context_parts.append("\nSPENDING DATA: No spending records in last 90 days\n")
+                context_parts.append("\nSPENDING DATA: No spending records found\n")
         except Exception as e:
             print(f"Error fetching spending data: {e}")
             import traceback
@@ -2833,6 +2823,9 @@ DETAILED TRANSACTION LOG (Most Recent 50):
                     if row['supplements']:
                         activity_counts['supplements'] += 1
                         day_activities.append('Supplements')
+                    if row['coitus']:
+                        activity_counts['coitus'] += 1
+                        day_activities.append('Coitus')
 
                     if day_activities or row['notes']:
                         activity_line = f"{date_str}: {', '.join(day_activities)}"
@@ -2856,11 +2849,12 @@ LIFETIME TOTALS:
 - Jiu Jitsu Sessions: {activity_counts['jiu_jitsu']} times
 - Skateboarding Sessions: {activity_counts['skateboarding']} times
 - Work Days: {activity_counts['work']} days
+- Coitus: {activity_counts['coitus']} times
 - Sauna Sessions: {activity_counts['sauna']} times
 - Supplements Taken: {activity_counts['supplements']} days
 
-DETAILED ACTIVITY LOG (Most Recent 30 Days):
-{chr(10).join(activity_details[:30])}
+DETAILED ACTIVITY LOG (Complete History - Most Recent First):
+{chr(10).join(activity_details)}
 
 ALL JIU JITSU DATES (Complete List - for analyzing patterns):
 {', '.join(jj_dates) if jj_dates else 'No jiu jitsu sessions recorded'}

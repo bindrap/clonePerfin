@@ -29,10 +29,7 @@
                             <input type="date" class="form-control" id="end_date" name="end_date" 
                                    value="{{ end_date }}" onchange="updateDateRange()">
                         </div>
-                        <div class="col-md-6 d-flex align-items-end">
-                            <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="setDateRange('week')">This Week</button>
-                            <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="setDateRange('month')">This Month</button>
-                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="setDateRange('year')">This Year</button>
+                        <div class="col-md-6">
                         </div>
                     </div>
                 </form>
@@ -388,32 +385,6 @@ function updateDateRange() {
     document.getElementById('dateRangeForm').submit();
 }
 
-function setDateRange(period) {
-    const today = new Date();
-    let startDate, endDate;
-    
-    switch(period) {
-        case 'week':
-            const dayOfWeek = today.getDay();
-            startDate = new Date(today);
-            startDate.setDate(today.getDate() - dayOfWeek);
-            endDate = new Date(startDate);
-            endDate.setDate(startDate.getDate() + 6);
-            break;
-        case 'month':
-            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-            endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-            break;
-        case 'year':
-            startDate = new Date(today.getFullYear(), 0, 1);
-            endDate = new Date(today.getFullYear(), 11, 31);
-            break;
-    }
-    
-    document.getElementById('start_date').value = startDate.toISOString().split('T')[0];
-    document.getElementById('end_date').value = endDate.toISOString().split('T')[0];
-    updateDateRange();
-}
 
 function previousMonth() {
     currentDate.setMonth(currentDate.getMonth() - 1);

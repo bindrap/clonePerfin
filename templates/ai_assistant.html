@@ -199,9 +199,33 @@
 .chat-messages {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: var(--space-xl);
     background: var(--bg-secondary);
     scroll-behavior: smooth;
+    max-height: calc(100vh - 420px);
+    min-height: 300px;
+    /* Ensure scrollbar is visible when needed */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
+}
+
+/* Custom scrollbar for webkit browsers */
+.chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.5);
 }
 
 /* Message Styling */
@@ -404,6 +428,10 @@
 
     .chat-messages {
         padding: var(--space-md);
+        max-height: calc(100vh - 500px);
+        min-height: 250px;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
 
     .message-content {
