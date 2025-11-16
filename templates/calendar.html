@@ -580,6 +580,16 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// Close modal when pressing ESC key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' || e.key === 'Esc') {
+        const overlay = document.getElementById('dayDetailsModalOverlay');
+        if (overlay && overlay.style.display !== 'none') {
+            closeDayDetailsModal();
+        }
+    }
+});
+
 // Initialize calendar on page load
 document.addEventListener('DOMContentLoaded', function() {
     generateCalendar();

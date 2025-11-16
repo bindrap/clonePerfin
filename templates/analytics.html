@@ -453,6 +453,16 @@ function closeOtherCategoryModal() {
     // No need to restore scrolling since we never disabled it
 }
 
+// Close modal when pressing ESC key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' || e.key === 'Esc') {
+        const overlay = document.getElementById('otherCategoryModalOverlay');
+        if (overlay && overlay.style.display !== 'none') {
+            closeOtherCategoryModal();
+        }
+    }
+});
+
 // Add CSS for clickable category
 const style = document.createElement('style');
 style.textContent = `

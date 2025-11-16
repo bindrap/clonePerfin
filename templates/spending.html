@@ -182,6 +182,16 @@ function closeEditSpendingModal() {
     // No need to restore scrolling since we never disabled it
 }
 
+// Close modal when pressing ESC key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' || e.key === 'Esc') {
+        const overlay = document.getElementById('editSpendingModalOverlay');
+        if (overlay && overlay.style.display !== 'none') {
+            closeEditSpendingModal();
+        }
+    }
+});
+
 function editSpending(entryId) {
     // Fetch entry data
     fetch(`/spending/edit/${entryId}`)
