@@ -1001,7 +1001,14 @@
         function updateCoitusVisibility() {
             const heartIcon = document.getElementById('heartIcon');
 
-            // Find all privacy-sensitive elements
+            // Define sensitive activity keywords
+            const sensitiveActivities = {
+                coitus: ['❤️', 'Coitus'],
+                smoking: ['🚬', 'Smoking'],
+                drinking: ['🍺', 'Drinking']
+            };
+
+            // Find all privacy-sensitive elements with targeted approach
             const sensitiveElements = new Set();
 
             // 1. Find elements with explicit privacy-sensitive class
@@ -1010,62 +1017,45 @@
             // 2. Find elements with coitus-element class (for dashboard stats)
             document.querySelectorAll('.coitus-element').forEach(el => sensitiveElements.add(el));
 
-            // 3. Find all elements containing sensitive content (comprehensive search)
-            const allElements = document.querySelectorAll('*');
-            allElements.forEach(el => {
-                // Skip certain containers to avoid hiding entire page
-                if (el.classList.contains('container') ||
-                    el.classList.contains('row') ||
-                    el.classList.contains('modal') ||
-                    el.id.includes('coitusToggle') ||
-                    el.tagName === 'BODY' ||
-                    el.tagName === 'HTML') {
-                    return;
+            // 3. Find specific activity dots (in calendar)
+            document.querySelectorAll('.activity-dot.coitus, .activity-dot.smoking, .activity-dot.drinking').forEach(el => {
+                sensitiveElements.add(el);
+            });
+
+            // 4. Find specific badges containing only sensitive activities
+            document.querySelectorAll('.badge').forEach(badge => {
+                const text = badge.textContent || badge.innerText || '';
+                // Only hide if badge contains ONLY one of the sensitive activities
+                if ((text.includes('❤️') && text.includes('Coitus')) ||
+                    (text.includes('🚬') && text.includes('Smoking')) ||
+                    (text.includes('🍺') && text.includes('Drinking'))) {
+                    sensitiveElements.add(badge);
                 }
+            });
 
-                const text = el.textContent || el.innerText || '';
-                const inputName = el.name || '';
-                const innerHTML = el.innerHTML || '';
-
-                // Check for sensitive keywords
-                const hasCoitus = text.includes('❤️') || text.includes('Coitus') || inputName === 'coitus';
-                const hasSmoking = text.includes('🚬') || text.includes('Smoking') || inputName === 'smoking';
-                const hasDrinking = text.includes('🍺') || text.includes('Drinking') || inputName === 'drinking';
-                const hasLCBO = text.includes('LCBO') || text.includes('Alcohol') || text.includes('Liquor');
-                const hasDispo = text.includes('Dispensary') || text.includes('Cannabis') || text.includes('dispo');
-                const hasSubstance = text.includes('Substance Spending') || text.includes('substance');
-
-                if (hasCoitus || hasSmoking || hasDrinking) {
-                    // For direct elements containing sensitive content
-                    sensitiveElements.add(el);
-
-                    // Also hide parent containers for certain element types
-                    if (el.classList.contains('activity-toggle') ||
-                        el.classList.contains('stat-card') ||
-                        el.classList.contains('badge') ||
-                        el.classList.contains('activity-dot')) {
-                        sensitiveElements.add(el);
-                    }
-
-                    // Hide parent activity-toggle for inputs
-                    const parentToggle = el.closest('.activity-toggle');
-                    if (parentToggle) {
-                        sensitiveElements.add(parentToggle);
-                    }
-
-                    // Hide parent col divs for stat cards
-                    const parentCol = el.closest('.col-lg-2, .col-md-3, .col-6, .col-md-6');
-                    if (parentCol && (el.classList.contains('stat-card') || parentCol.querySelector('.stat-card'))) {
+            // 5. Find activity toggles for sensitive activities (in personal page)
+            document.querySelectorAll('.activity-toggle').forEach(toggle => {
+                // Check if this toggle is for a sensitive activity by looking at input name
+                const input = toggle.querySelector('input[type="checkbox"]');
+                if (input && (input.name === 'coitus' || input.name === 'smoking' || input.name === 'drinking')) {
+                    // Hide the parent col div that contains this toggle
+                    const parentCol = toggle.closest('.col-md-6');
+                    if (parentCol) {
                         sensitiveElements.add(parentCol);
                     }
                 }
+            });
 
-                // Hide substance spending sections (LCBO, Dispensary mentions in analytics)
-                if ((hasLCBO || hasDispo || hasSubstance) &&
-                    (el.classList.contains('col-md-6') || el.classList.contains('row') || el.classList.contains('col-12'))) {
-                    // Check if this is part of substance spending section
-                    if (innerHTML.includes('LCBO') || innerHTML.includes('Dispensary') || innerHTML.includes('Substance Spending')) {
-                        sensitiveElements.add(el);
+            // 6. Find stat cards for sensitive activities (on dashboard)
+            document.querySelectorAll('.stat-card').forEach(statCard => {
+                const text = statCard.textContent || statCard.innerText || '';
+                if ((text.includes('❤️') && text.includes('Coitus')) ||
+                    (text.includes('🚬') && text.includes('Smoking')) ||
+                    (text.includes('🍺') && text.includes('Drinking'))) {
+                    // Hide the parent column containing the stat card
+                    const parentCol = statCard.closest('.col-lg-2, .col-md-3, .col-6, .col-md-6');
+                    if (parentCol) {
+                        sensitiveElements.add(parentCol);
                     }
                 }
             });
