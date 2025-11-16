@@ -1000,43 +1000,85 @@
 
         function updateCoitusVisibility() {
             const heartIcon = document.getElementById('heartIcon');
-            
-            // Find all coitus-related elements more comprehensively
-            const coitusElements = [];
-            
-            // Find elements with private content (coitus, smoking, drinking)
-            const allElements = document.querySelectorAll('span, small, div.col-md-3, div.col-lg-2, div.stat-card, div.activity-toggle, div.badge, label, input, textarea, button');
+
+            // Find all privacy-sensitive elements
+            const sensitiveElements = new Set();
+
+            // 1. Find elements with explicit privacy-sensitive class
+            document.querySelectorAll('.privacy-sensitive').forEach(el => sensitiveElements.add(el));
+
+            // 2. Find elements with coitus-element class (for dashboard stats)
+            document.querySelectorAll('.coitus-element').forEach(el => sensitiveElements.add(el));
+
+            // 3. Find all elements containing sensitive content (comprehensive search)
+            const allElements = document.querySelectorAll('*');
             allElements.forEach(el => {
+                // Skip certain containers to avoid hiding entire page
+                if (el.classList.contains('container') ||
+                    el.classList.contains('row') ||
+                    el.classList.contains('modal') ||
+                    el.id.includes('coitusToggle') ||
+                    el.tagName === 'BODY' ||
+                    el.tagName === 'HTML') {
+                    return;
+                }
+
                 const text = el.textContent || el.innerText || '';
                 const inputName = el.name || '';
-                if ((text.includes('❤️') || text.includes('Coitus') || inputName === 'coitus' ||
-                     text.includes('🚬') || text.includes('Smoking') || inputName === 'smoking' ||
-                     text.includes('🍺') || text.includes('Drinking') || inputName === 'drinking') && 
-                    !el.classList.contains('container') && 
-                    !el.classList.contains('row') && 
-                    !el.id.includes('coitusToggle')) {
-                    coitusElements.push(el);
-                    // Also hide parent activity-toggle if it's a private input
-                    if (el.closest('.activity-toggle') && (inputName === 'coitus' || inputName === 'smoking' || inputName === 'drinking' || 
-                        text.includes('❤️') || text.includes('🚬') || text.includes('🍺'))) {
-                        coitusElements.push(el.closest('.activity-toggle'));
+                const innerHTML = el.innerHTML || '';
+
+                // Check for sensitive keywords
+                const hasCoitus = text.includes('❤️') || text.includes('Coitus') || inputName === 'coitus';
+                const hasSmoking = text.includes('🚬') || text.includes('Smoking') || inputName === 'smoking';
+                const hasDrinking = text.includes('🍺') || text.includes('Drinking') || inputName === 'drinking';
+                const hasLCBO = text.includes('LCBO') || text.includes('Alcohol') || text.includes('Liquor');
+                const hasDispo = text.includes('Dispensary') || text.includes('Cannabis') || text.includes('dispo');
+                const hasSubstance = text.includes('Substance Spending') || text.includes('substance');
+
+                if (hasCoitus || hasSmoking || hasDrinking) {
+                    // For direct elements containing sensitive content
+                    sensitiveElements.add(el);
+
+                    // Also hide parent containers for certain element types
+                    if (el.classList.contains('activity-toggle') ||
+                        el.classList.contains('stat-card') ||
+                        el.classList.contains('badge') ||
+                        el.classList.contains('activity-dot')) {
+                        sensitiveElements.add(el);
+                    }
+
+                    // Hide parent activity-toggle for inputs
+                    const parentToggle = el.closest('.activity-toggle');
+                    if (parentToggle) {
+                        sensitiveElements.add(parentToggle);
+                    }
+
+                    // Hide parent col divs for stat cards
+                    const parentCol = el.closest('.col-lg-2, .col-md-3, .col-6, .col-md-6');
+                    if (parentCol && (el.classList.contains('stat-card') || parentCol.querySelector('.stat-card'))) {
+                        sensitiveElements.add(parentCol);
+                    }
+                }
+
+                // Hide substance spending sections (LCBO, Dispensary mentions in analytics)
+                if ((hasLCBO || hasDispo || hasSubstance) &&
+                    (el.classList.contains('col-md-6') || el.classList.contains('row') || el.classList.contains('col-12'))) {
+                    // Check if this is part of substance spending section
+                    if (innerHTML.includes('LCBO') || innerHTML.includes('Dispensary') || innerHTML.includes('Substance Spending')) {
+                        sensitiveElements.add(el);
                     }
                 }
             });
-            
-            // Also find elements with coitus-element class (for dashboard stats)
-            const coitusElementClass = document.querySelectorAll('.coitus-element');
-            coitusElementClass.forEach(el => coitusElements.push(el));
-            
+
             // Apply visibility changes
-            coitusElements.forEach(el => {
+            sensitiveElements.forEach(el => {
                 if (coitusVisible) {
                     el.classList.remove('coitus-hidden');
                 } else {
                     el.classList.add('coitus-hidden');
                 }
             });
-            
+
             // Update heart icon appearance
             if (heartIcon) {
                 if (coitusVisible) {
@@ -1045,10 +1087,18 @@
                     heartIcon.classList.add('dimmed');
                 }
             }
-            
+
             // Trigger chart updates if available (for dashboard activity chart)
             if (typeof updateActivityChart === 'function') {
                 updateActivityChart();
+            }
+
+            // Trigger analytics chart updates if available
+            if (typeof updateWeeklyActivityChart === 'function') {
+                updateWeeklyActivityChart();
+            }
+            if (typeof loadActivityAnalytics === 'function') {
+                loadActivityAnalytics();
             }
         }
         // Coitus visibility toggle functionality - reset to visible by default for safety
@@ -1058,55 +1108,11 @@
             localStorage.setItem('coitusVisible', 'true');
             coitusVisible = true;
         }
-        
+
         function toggleCoitusVisibility() {
             coitusVisible = !coitusVisible;
             localStorage.setItem('coitusVisible', coitusVisible);
             updateCoitusVisibility();
-        }
-        
-        function updateCoitusVisibility() {
-            const heartIcon = document.getElementById('heartIcon');
-            
-            // Only look for specific coitus-related elements, not general containers
-            const coitusElements = [];
-            
-            // Find elements with private content (coitus, smoking, drinking)
-            const allElements = document.querySelectorAll('span, small, div.col-md-3, div.col-lg-2, div.stat-card, div.activity-toggle, div.badge, label, input, textarea, button');
-            allElements.forEach(el => {
-                const text = el.textContent || el.innerText || '';
-                const inputName = el.name || '';
-                if ((text.includes('❤️') || text.includes('Coitus') || inputName === 'coitus' ||
-                     text.includes('🚬') || text.includes('Smoking') || inputName === 'smoking' ||
-                     text.includes('🍺') || text.includes('Drinking') || inputName === 'drinking') && 
-                    !el.classList.contains('container') && 
-                    !el.classList.contains('row') && 
-                    !el.id.includes('coitusToggle')) {
-                    coitusElements.push(el);
-                    // Also hide parent activity-toggle if it's a private input
-                    if (el.closest('.activity-toggle') && (inputName === 'coitus' || inputName === 'smoking' || inputName === 'drinking' || 
-                        text.includes('❤️') || text.includes('🚬') || text.includes('🍺'))) {
-                        coitusElements.push(el.closest('.activity-toggle'));
-                    }
-                }
-            });
-            
-            coitusElements.forEach(el => {
-                if (coitusVisible) {
-                    el.classList.remove('coitus-hidden');
-                } else {
-                    el.classList.add('coitus-hidden');
-                }
-            });
-            
-            // Update heart icon appearance
-            if (heartIcon) {
-                if (coitusVisible) {
-                    heartIcon.classList.remove('dimmed');
-                } else {
-                    heartIcon.classList.add('dimmed');
-                }
-            }
         }
         
         // Initialize on page load
