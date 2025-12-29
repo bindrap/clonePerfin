@@ -485,27 +485,52 @@ def spending():
 @app.route('/spending/add', methods=['POST'])
 def add_spending():
     date_str = request.form.get('date')
-    item = request.form.get('item')
-    price = float(request.form.get('price'))
-    
-    if not item or price <= 0:
-        flash('Please provide valid item and price', 'error')
+    items = request.form.getlist('items[]')
+    prices = request.form.getlist('prices[]')
+
+    # Validate that we have matching items and prices
+    if not items or not prices or len(items) != len(prices):
+        flash('Please provide valid items and prices', 'error')
         return redirect(url_for('spending'))
-    
+
+    # Validate each item and price
+    for item, price_str in zip(items, prices):
+        if not item or not price_str:
+            flash('All items and prices must be filled in', 'error')
+            return redirect(url_for('spending'))
+        try:
+            price = float(price_str)
+            if price <= 0:
+                flash('All prices must be greater than 0', 'error')
+                return redirect(url_for('spending'))
+        except ValueError:
+            flash('Invalid price format', 'error')
+            return redirect(url_for('spending'))
+
     date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        INSERT INTO spending_log (date, item, price)
-        VALUES (?, ?, ?)
-    ''', (date_obj, item, price))
-    
+
+    # Insert all items
+    total_amount = 0
+    for item, price_str in zip(items, prices):
+        price = float(price_str)
+        total_amount += price
+        cursor.execute('''
+            INSERT INTO spending_log (date, item, price)
+            VALUES (?, ?, ?)
+        ''', (date_obj, item, price))
+
     conn.commit()
     conn.close()
-    
-    flash(f'Added {item} for ${price:.2f}', 'success')
+
+    # Create appropriate flash message
+    if len(items) == 1:
+        flash(f'Added {items[0]} for ${float(prices[0]):.2f}', 'success')
+    else:
+        flash(f'Added {len(items)} expenses totaling ${total_amount:.2f}', 'success')
+
     return redirect(url_for('spending'))
 
 @app.route('/spending/delete/<int:entry_id>', methods=['POST'])

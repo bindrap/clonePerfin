@@ -1,6 +1,8 @@
 services:
   personal-webapp:
-    build: .
+    build:
+      context: .
+      network: host
     ports:
       - "5001:5001"
     volumes:
@@ -10,6 +12,10 @@ services:
     restart: unless-stopped
     environment:
       - FLASK_ENV=production
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     networks:
       - webapp-network
 

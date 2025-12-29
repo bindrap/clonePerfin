@@ -48,27 +48,45 @@
                 <h5><i class="fas fa-plus"></i> Add Expense</h5>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('add_spending') }}">
+                <form method="POST" action="{{ url_for('add_spending') }}" id="addExpenseForm">
                     <div class="mb-3">
                         <label for="date" class="form-label">Date</label>
-                        <input type="date" class="form-control" id="date" name="date" 
+                        <input type="date" class="form-control" id="date" name="date"
                                value="{{ today }}" required>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="item" class="form-label">Item</label>
-                        <input type="text" class="form-control" id="item" name="item" 
-                               placeholder="e.g., Slushie" required>
+
+                    <div class="mb-2">
+                        <label class="form-label">Items</label>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="price" class="form-label">Price ($)</label>
-                        <input type="number" class="form-control" id="price" name="price" 
-                               step="0.01" min="0.01" placeholder="2.00" required>
+
+                    <div id="expenseRows">
+                        <div class="expense-row mb-2">
+                            <div class="row g-2">
+                                <div class="col-7">
+                                    <input type="text" class="form-control" name="items[]"
+                                           placeholder="e.g., Slushie" required>
+                                </div>
+                                <div class="col-4">
+                                    <input type="number" class="form-control" name="prices[]"
+                                           step="0.01" min="0.01" placeholder="2.00" required>
+                                </div>
+                                <div class="col-1 d-flex align-items-center">
+                                    <button type="button" class="btn btn-sm btn-outline-danger remove-row"
+                                            onclick="removeExpenseRow(this)" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    
+
+                    <button type="button" class="btn btn-outline-secondary btn-sm w-100 mb-2"
+                            onclick="addExpenseRow()">
+                        <i class="fas fa-plus"></i> Add Another Item
+                    </button>
+
                     <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-plus"></i> Add Expense
+                        <i class="fas fa-save"></i> <span id="submitText">Add Expense</span>
                     </button>
                 </form>
             </div>
@@ -222,6 +240,66 @@ document.addEventListener('keydown', function(e) {
         closeEditSpendingModal();
     }
 });
+
+// Multiple expense row functions
+function addExpenseRow() {
+    const expenseRows = document.getElementById('expenseRows');
+    const newRow = document.createElement('div');
+    newRow.className = 'expense-row mb-2';
+    newRow.innerHTML = `
+        <div class="row g-2">
+            <div class="col-7">
+                <input type="text" class="form-control" name="items[]"
+                       placeholder="e.g., Slushie" required>
+            </div>
+            <div class="col-4">
+                <input type="number" class="form-control" name="prices[]"
+                       step="0.01" min="0.01" placeholder="2.00" required>
+            </div>
+            <div class="col-1 d-flex align-items-center">
+                <button type="button" class="btn btn-sm btn-outline-danger remove-row"
+                        onclick="removeExpenseRow(this)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    expenseRows.appendChild(newRow);
+
+    // Focus on the new item input
+    const itemInput = newRow.querySelector('input[name="items[]"]');
+    if (itemInput) {
+        itemInput.focus();
+    }
+
+    updateRemoveButtons();
+    updateSubmitText();
+}
+
+function removeExpenseRow(button) {
+    const row = button.closest('.expense-row');
+    row.remove();
+    updateRemoveButtons();
+    updateSubmitText();
+}
+
+function updateRemoveButtons() {
+    const rows = document.querySelectorAll('.expense-row');
+    rows.forEach((row, index) => {
+        const removeBtn = row.querySelector('.remove-row');
+        if (removeBtn) {
+            removeBtn.style.display = rows.length > 1 ? 'inline-block' : 'none';
+        }
+    });
+}
+
+function updateSubmitText() {
+    const rowCount = document.querySelectorAll('.expense-row').length;
+    const submitText = document.getElementById('submitText');
+    if (submitText) {
+        submitText.textContent = rowCount > 1 ? `Add ${rowCount} Expenses` : 'Add Expense';
+    }
+}
 </script>
 
 {% endblock %}
