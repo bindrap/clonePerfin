@@ -304,7 +304,7 @@ def personal():
 def save_personal():
     date_str = request.form.get('date')
     date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-    
+
     gym = 1 if request.form.get('gym') == 'on' else 0
     jiu_jitsu = 1 if request.form.get('jiu_jitsu') == 'on' else 0
     skateboarding = 1 if request.form.get('skateboarding') == 'on' else 0
@@ -315,19 +315,24 @@ def save_personal():
     smoking = 1 if request.form.get('smoking') == 'on' else 0
     drinking = 1 if request.form.get('drinking') == 'on' else 0
     notes = request.form.get('notes', '')
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute('''
-        INSERT OR REPLACE INTO personal_log 
+        INSERT OR REPLACE INTO personal_log
         (date, gym, jiu_jitsu, skateboarding, work, coitus, sauna, supplements, smoking, drinking, notes, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ''', (date_obj, gym, jiu_jitsu, skateboarding, work, coitus, sauna, supplements, smoking, drinking, notes))
-    
+
     conn.commit()
     conn.close()
-    
+
+    # Return JSON response for AJAX requests
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.accept_json:
+        return jsonify({'success': True, 'message': 'Personal data saved successfully!'}), 200
+
+    # Traditional form submission fallback
     flash('Personal data saved successfully!', 'success')
     return redirect(url_for('personal', date=date_str))
 
@@ -776,77 +781,60 @@ def analytics():
 # NEW ROUTES FOR PORTFOLIO
 @app.route('/portfolio')
 def portfolio():
-    """Portfolio tracking page"""
+    """Portfolio tracking page - Now supports dynamic stocks"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Get latest portfolio data from portfolio_log
+
+    # Get all holdings with their purchase and current market values
     cursor.execute('''
-        SELECT 
-            date,
-            total_portfolio_value as total_market_value,
-            nasdaq_value,
-            btcc_value,
-            zsp_value,
-            difference
-        FROM portfolio_log 
-        ORDER BY date DESC 
-        LIMIT 1
+        SELECT
+            h.etf_symbol,
+            h.purchase_value,
+            COALESCE(m.market_value, h.purchase_value) as market_value
+        FROM etf_holdings h
+        LEFT JOIN (
+            SELECT symbol, market_value
+            FROM stock_market_values
+            WHERE date = (SELECT MAX(date) FROM stock_market_values)
+        ) m ON h.etf_symbol = m.symbol
+        ORDER BY h.etf_symbol
     ''')
-    latest_data = cursor.fetchone()
-    
-    # Calculate total invested from ETF holdings
+    all_holdings = cursor.fetchall()
+
+    # Calculate totals
+    total_invested = sum(float(h['purchase_value']) for h in all_holdings)
+    total_market_value = sum(float(h['market_value']) for h in all_holdings)
+    profit_loss = total_market_value - total_invested
+    profit_loss_percentage = (profit_loss / total_invested * 100) if total_invested > 0 else 0
+
+    # Get latest date from portfolio_log for snapshot date
+    cursor.execute('SELECT MAX(date) as latest_date FROM portfolio_log')
+    latest_date_result = cursor.fetchone()
+    latest_date = latest_date_result['latest_date'] if latest_date_result['latest_date'] else get_toronto_date()
+
+    # Create snapshot
+    latest_snapshot = {
+        'date': latest_date,
+        'total_market_value': total_market_value,
+        'total_invested': total_invested,
+        'profit_loss': profit_loss,
+        'profit_loss_percentage': profit_loss_percentage
+    }
+
+    # Get recent portfolio updates
     cursor.execute('''
-        SELECT SUM(purchase_value) as total_invested FROM etf_holdings
-    ''')
-    invested_result = cursor.fetchone()
-    total_invested = float(invested_result['total_invested']) if invested_result['total_invested'] else 0
-    
-    # Create snapshot object with calculated values
-    latest_snapshot = None
-    if latest_data and latest_data['total_market_value']:
-        current_value = float(latest_data['total_market_value'])
-        profit_loss = current_value - total_invested
-        profit_loss_percentage = (profit_loss / total_invested * 100) if total_invested > 0 else 0
-        
-        latest_snapshot = {
-            'date': latest_data['date'],
-            'total_market_value': current_value,
-            'total_invested': total_invested,
-            'profit_loss': profit_loss,
-            'profit_loss_percentage': profit_loss_percentage,
-            'nasdaq_value': latest_data['nasdaq_value'],
-            'btcc_value': latest_data['btcc_value'],
-            'zsp_value': latest_data['zsp_value']
-        }
-    
-    # Get recent portfolio updates from portfolio_log
-    cursor.execute('''
-        SELECT 
+        SELECT
             date,
             total_portfolio_value,
-            nasdaq_value,
-            btcc_value,
-            zsp_value,
-            difference,
-            'update' as entry_type
-        FROM portfolio_log 
+            difference
+        FROM portfolio_log
         WHERE total_portfolio_value > 0
-        ORDER BY date DESC 
+        ORDER BY date DESC
         LIMIT 10
     ''')
     recent_entries = cursor.fetchall()
-    
-    # Calculate portfolio summary from ETF holdings
-    cursor.execute('''
-        SELECT 
-            SUM(purchase_value) as total_invested,
-            COUNT(*) as etf_count
-        FROM etf_holdings
-    ''')
-    portfolio_summary = cursor.fetchone()
-    
-    # Get portfolio performance over time from portfolio_log
+
+    # Get portfolio performance history
     cursor.execute('''
         SELECT
             date,
@@ -863,18 +851,32 @@ def portfolio():
     ''', (total_invested, total_invested if total_invested > 0 else 1))
     performance_history = cursor.fetchall()
 
-    # Get current ETF holdings for form display
-    cursor.execute('''
-        SELECT etf_symbol, purchase_value
-        FROM etf_holdings
-        ORDER BY etf_symbol
-    ''')
-    etf_holdings_raw = cursor.fetchall()
-
-    # Convert to dictionary for easy template access
+    # Convert holdings to list and dictionary formats for template
+    holdings_list = []
     current_holdings = {}
-    for holding in etf_holdings_raw:
-        current_holdings[holding['etf_symbol']] = float(holding['purchase_value'])
+    stock_market_values = {}
+
+    for holding in all_holdings:
+        symbol = holding['etf_symbol']
+        purchase_val = float(holding['purchase_value'])
+        market_val = float(holding['market_value'])
+
+        holdings_list.append({
+            'symbol': symbol,
+            'purchase_value': purchase_val,
+            'market_value': market_val,
+            'profit_loss': market_val - purchase_val,
+            'profit_loss_percentage': ((market_val - purchase_val) / purchase_val * 100) if purchase_val > 0 else 0,
+            'portfolio_percentage': (market_val / total_market_value * 100) if total_market_value > 0 else 0
+        })
+
+        current_holdings[symbol] = purchase_val
+        stock_market_values[symbol] = market_val
+
+    portfolio_summary = {
+        'total_invested': total_invested,
+        'etf_count': len(all_holdings)
+    }
 
     conn.close()
 
@@ -883,97 +885,127 @@ def portfolio():
                          recent_entries=recent_entries,
                          portfolio_summary=portfolio_summary,
                          performance_history=performance_history,
-                         current_holdings=current_holdings)
+                         current_holdings=current_holdings,
+                         holdings_list=holdings_list,
+                         stock_market_values=stock_market_values)
 
 @app.route('/portfolio/update', methods=['POST'])
 def update_portfolio():
-    """Update current portfolio market value"""
-    nasdaq_value = float(request.form.get('nasdaq_value', 0))
-    btcc_value = float(request.form.get('btcc_value', 0))
-    zsp_value = float(request.form.get('zsp_value', 0))
-    
-    # Calculate total portfolio value
-    current_value = nasdaq_value + btcc_value + zsp_value
-    
-    if current_value <= 0:
-        flash('Please provide valid ETF values', 'error')
-        return redirect(url_for('portfolio'))
-    
-    today = get_toronto_date()
-    
+    """Update current portfolio market values - Dynamic for all stocks"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Get total invested amount from ETF holdings
+
+    # Get all holdings
+    cursor.execute('SELECT etf_symbol FROM etf_holdings')
+    holdings = cursor.fetchall()
+
+    today = get_toronto_date()
+    current_value = 0
+
+    # Update market value for each stock
+    for holding in holdings:
+        symbol = holding['etf_symbol']
+        market_value = float(request.form.get(f'{symbol.lower()}_value', 0))
+
+        if market_value > 0:
+            # Insert or update stock market value
+            cursor.execute('''
+                INSERT OR REPLACE INTO stock_market_values
+                (date, symbol, market_value, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (today, symbol, market_value))
+
+            current_value += market_value
+
+    if current_value <= 0:
+        flash('Please provide valid market values for your holdings', 'error')
+        conn.close()
+        return redirect(url_for('portfolio'))
+
+    # Get total invested
     cursor.execute('SELECT SUM(purchase_value) as total_invested FROM etf_holdings')
     result = cursor.fetchone()
     total_invested = float(result['total_invested']) if result['total_invested'] else 0
-    
+
     # Calculate difference from previous day
     cursor.execute('''
-        SELECT total_portfolio_value FROM portfolio_log 
-        WHERE total_portfolio_value > 0 
+        SELECT total_portfolio_value FROM portfolio_log
+        WHERE total_portfolio_value > 0
         ORDER BY date DESC LIMIT 1
     ''')
     prev_result = cursor.fetchone()
     prev_value = float(prev_result['total_portfolio_value']) if prev_result else current_value
     difference = current_value - prev_value
-    
-    # Insert or update today's portfolio log
+
+    # Insert or update portfolio log (keeping old columns for backward compatibility)
     cursor.execute('''
-        INSERT OR REPLACE INTO portfolio_log 
-        (date, total_portfolio_value, nasdaq_value, btcc_value, zsp_value, trade_cash, difference)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (today, current_value, nasdaq_value, btcc_value, zsp_value, 0, difference))
-    
+        INSERT OR REPLACE INTO portfolio_log
+        (date, total_portfolio_value, difference)
+        VALUES (?, ?, ?)
+    ''', (today, current_value, difference))
+
     conn.commit()
     conn.close()
-    
+
     profit_loss = current_value - total_invested
     flash(f'Portfolio updated: ${current_value:.2f} (P/L: ${profit_loss:.2f})', 'success')
     return redirect(url_for('portfolio'))
 
 @app.route('/portfolio/update_etf', methods=['POST'])
 def update_etf_holdings():
-    """Update ETF purchase values"""
-    nas_value = float(request.form.get('nas_value', 0))
-    btcc_value = float(request.form.get('btcc_value', 0))
-    zsp_value = float(request.form.get('zsp_value', 0))
-
+    """Update stock/ETF purchase values - Dynamic for all holdings"""
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Update or insert ETF holdings (don't delete existing ones)
-    etf_updates = [
-        ('NAS', nas_value),
-        ('BTCC', btcc_value),
-        ('ZSP', zsp_value)
-    ]
+    # Get all holdings
+    cursor.execute('SELECT etf_symbol FROM etf_holdings')
+    holdings = cursor.fetchall()
 
-    for symbol, value in etf_updates:
+    for holding in holdings:
+        symbol = holding['etf_symbol']
+        value = float(request.form.get(f'{symbol.lower()}_purchase', 0))
+
         if value > 0:
-            # Check if ETF already exists
-            cursor.execute('SELECT id, purchase_value FROM etf_holdings WHERE etf_symbol = ?', (symbol,))
-            existing = cursor.fetchone()
-
-            if existing:
-                # Update existing ETF holding
-                cursor.execute('''
-                    UPDATE etf_holdings
-                    SET purchase_value = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE etf_symbol = ?
-                ''', (value, symbol))
-            else:
-                # Insert new ETF holding
-                cursor.execute('''
-                    INSERT INTO etf_holdings (etf_symbol, purchase_value, created_at, updated_at)
-                    VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                ''', (symbol, value))
+            cursor.execute('''
+                UPDATE etf_holdings
+                SET purchase_value = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE etf_symbol = ?
+            ''', (value, symbol))
 
     conn.commit()
     conn.close()
 
-    flash('ETF holdings updated successfully!', 'success')
+    flash('Holdings updated successfully!', 'success')
+    return redirect(url_for('portfolio'))
+
+@app.route('/portfolio/add_stock', methods=['POST'])
+def add_stock():
+    """Add a new stock to portfolio"""
+    symbol = request.form.get('symbol', '').upper().strip()
+    purchase_value = float(request.form.get('purchase_value', 0))
+
+    if not symbol or purchase_value <= 0:
+        flash('Please provide valid symbol and purchase value', 'error')
+        return redirect(url_for('portfolio'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check if stock already exists
+    cursor.execute('SELECT id FROM etf_holdings WHERE etf_symbol = ?', (symbol,))
+    existing = cursor.fetchone()
+
+    if existing:
+        flash(f'{symbol} already exists in your portfolio. Use buy/sell to adjust holdings.', 'warning')
+    else:
+        cursor.execute('''
+            INSERT INTO etf_holdings (etf_symbol, purchase_value, created_at, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ''', (symbol, purchase_value))
+        conn.commit()
+        flash(f'Added {symbol} to portfolio with ${purchase_value:.2f}', 'success')
+
+    conn.close()
     return redirect(url_for('portfolio'))
 
 @app.route('/portfolio/transact_etf', methods=['POST'])

@@ -135,10 +135,8 @@
                                   placeholder="Any additional notes...">{% if today_data %}{{ today_data.notes }}{% endif %}</textarea>
                     </div>
 
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Save Activities
-                    </button>
                 </form>
+                <div id="save-status" class="mt-2 small text-muted"></div>
             </div>
         </div>
     </div>
@@ -193,5 +191,63 @@ function loadDataForDate() {
         window.location.href = `{{ url_for('personal') }}?date=${selectedDate}`;
     }
 }
+
+// Auto-save functionality
+function showSaveStatus(message, isError = false) {
+    const statusDiv = document.getElementById('save-status');
+    statusDiv.textContent = message;
+    statusDiv.className = `mt-2 small ${isError ? 'text-danger' : 'text-success'}`;
+
+    // Clear status after 3 seconds
+    setTimeout(() => {
+        statusDiv.textContent = '';
+        statusDiv.className = 'mt-2 small text-muted';
+    }, 3000);
+}
+
+function autoSave() {
+    const form = document.querySelector('form');
+    const formData = new FormData(form);
+
+    showSaveStatus('Saving...');
+
+    fetch('{{ url_for("save_personal") }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            showSaveStatus('✓ Saved automatically');
+        } else {
+            showSaveStatus('Failed to save', true);
+        }
+    })
+    .catch(error => {
+        console.error('Save error:', error);
+        showSaveStatus('Failed to save', true);
+    });
+}
+
+// Debounce function for notes field
+let notesTimeout;
+function debouncedAutoSave() {
+    clearTimeout(notesTimeout);
+    notesTimeout = setTimeout(autoSave, 1000); // Wait 1 second after typing stops
+}
+
+// Add event listeners when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-save on checkbox toggle
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', autoSave);
+    });
+
+    // Auto-save notes with debounce
+    const notesField = document.getElementById('notes');
+    if (notesField) {
+        notesField.addEventListener('input', debouncedAutoSave);
+    }
+});
 </script>
 {% endblock %}
